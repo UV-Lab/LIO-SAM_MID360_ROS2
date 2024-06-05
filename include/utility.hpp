@@ -37,8 +37,8 @@
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2_ros/transform_listener.h>
 #include <tf2_ros/transform_broadcaster.h>
-#include <tf2_eigen/tf2_eigen.hpp>
-#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
+#include <tf2_eigen/tf2_eigen.h>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 #include "livox_ros_driver2/msg/custom_msg.hpp"
 
 #include <vector>
@@ -65,18 +65,17 @@ typedef pcl::PointXYZI PointType;
 
 enum class SensorType { VELODYNE, OUSTER, LIVOX };
 
-class ParamServer : public rclcpp::Node
-{
+class ParamServer : public rclcpp::Node {
 public:
     std::string robot_id;
 
-    //Topics
+    // Topics
     string pointCloudTopic;
     string imuTopic;
     string odomTopic;
     string gpsTopic;
 
-    //Frames
+    // Frames
     string lidarFrame;
     string baselinkFrame;
     string odometryFrame;
@@ -89,7 +88,7 @@ public:
     float poseCovThreshold;
 
     // Save pcd
-    bool savePCD;
+    bool savePCD, saveKeyframeMap;
     string savePCDDirectory;
 
     // Lidar Sensor Configuration
@@ -124,7 +123,7 @@ public:
     // voxel filter paprams
     float odometrySurfLeafSize;
     float mappingCornerLeafSize;
-    float mappingSurfLeafSize ;
+    float mappingSurfLeafSize;
 
     float z_tollerance;
     float rotation_tollerance;
@@ -140,12 +139,12 @@ public:
     float surroundingKeyframeSearchRadius;
 
     // Loop closure
-    bool  loopClosureEnableFlag;
+    bool loopClosureEnableFlag;
     float loopClosureFrequency;
-    int   surroundingKeyframeSize;
+    int surroundingKeyframeSize;
     float historyKeyframeSearchRadius;
     float historyKeyframeSearchTimeDiff;
-    int   historyKeyframeSearchNum;
+    int historyKeyframeSearchNum;
     float historyKeyframeFitnessScore;
 
     // global map visualization radius
@@ -153,8 +152,7 @@ public:
     float globalMapVisualizationPoseDensity;
     float globalMapVisualizationLeafSize;
 
-    ParamServer(std::string node_name, const rclcpp::NodeOptions & options) : Node(node_name, options)
-    {
+    ParamServer(std::string node_name, const rclcpp::NodeOptions &options) : Node(node_name, options) {
         declare_parameter("pointCloudTopic", "points");
         get_parameter("pointCloudTopic", pointCloudTopic);
         declare_parameter("imuTopic", "imu/data");
@@ -184,29 +182,22 @@ public:
 
         declare_parameter("savePCD", false);
         get_parameter("savePCD", savePCD);
+        declare_parameter("saveKeyframeMap", false);
+        get_parameter("saveKeyframeMap", saveKeyframeMap);
         declare_parameter("savePCDDirectory", "/Downloads/LOAM/");
         get_parameter("savePCDDirectory", savePCDDirectory);
 
         std::string sensorStr;
         declare_parameter("sensor", "ouster");
         get_parameter("sensor", sensorStr);
-        if (sensorStr == "velodyne")
-        {
+        if (sensorStr == "velodyne") {
             sensor = SensorType::VELODYNE;
-        }
-        else if (sensorStr == "ouster")
-        {
+        } else if (sensorStr == "ouster") {
             sensor = SensorType::OUSTER;
-        }
-        else if (sensorStr == "livox")
-        {
+        } else if (sensorStr == "livox") {
             sensor = SensorType::LIVOX;
-        }
-        else
-        {
-            RCLCPP_ERROR_STREAM(
-                get_logger(),
-                "Invalid sensor type (must be either 'velodyne' or 'ouster' or 'livox'): " << sensorStr);
+        } else {
+            RCLCPP_ERROR_STREAM(get_logger(), "Invalid sensor type (must be either 'velodyne' or 'ouster' or 'livox'): " << sensorStr);
             rclcpp::shutdown();
         }
 
@@ -234,16 +225,14 @@ public:
         declare_parameter("imuRPYWeight", 0.01);
         get_parameter("imuRPYWeight", imuRPYWeight);
 
-        double ida[] = { 1.0,  0.0,  0.0,
-                         0.0,  1.0,  0.0,
-                         0.0,  0.0,  1.0};
-        std::vector < double > id(ida, std::end(ida));
+        double ida[] = {1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0};
+        std::vector<double> id(ida, std::end(ida));
         declare_parameter("extrinsicRot", id);
         get_parameter("extrinsicRot", extRotV);
         declare_parameter("extrinsicRPY", id);
         get_parameter("extrinsicRPY", extRPYV);
         double zea[] = {0.0, 0.0, 0.0};
-        std::vector < double > ze(zea, std::end(zea));
+        std::vector<double> ze(zea, std::end(zea));
         declare_parameter("extrinsicTrans", ze);
         get_parameter("extrinsicTrans", extTransV);
 
@@ -312,13 +301,12 @@ public:
         usleep(100);
     }
 
-    sensor_msgs::msg::Imu imuConverter(const sensor_msgs::msg::Imu& imu_in)
-    {
+    sensor_msgs::msg::Imu imuConverter(const sensor_msgs::msg::Imu &imu_in) {
         sensor_msgs::msg::Imu imu_out = imu_in;
         // rotate acceleration
         Eigen::Vector3d acc(imu_in.linear_acceleration.x, imu_in.linear_acceleration.y, imu_in.linear_acceleration.z);
-        
-        acc*=imuGravity;
+
+        acc *= imuGravity;
 
         acc = extRot * acc;
         imu_out.linear_acceleration.x = acc.x();
@@ -332,15 +320,14 @@ public:
         imu_out.angular_velocity.z = gyr.z();
         // rotate roll pitch yaw
         Eigen::Quaterniond q_from(imu_in.orientation.w, imu_in.orientation.x, imu_in.orientation.y, imu_in.orientation.z);
-        Eigen::Quaterniond q_final = extQRPY; //q_from * extQRPY;
+        Eigen::Quaterniond q_final = extQRPY;  // q_from * extQRPY;
         q_final.normalize();
         imu_out.orientation.x = q_final.x();
         imu_out.orientation.y = q_final.y();
         imu_out.orientation.z = q_final.z();
         imu_out.orientation.w = q_final.w();
 
-        if (sqrt(q_final.x()*q_final.x() + q_final.y()*q_final.y() + q_final.z()*q_final.z() + q_final.w()*q_final.w()) < 0.1)
-        {
+        if (sqrt(q_final.x() * q_final.x() + q_final.y() * q_final.y() + q_final.z() * q_final.z() + q_final.w() * q_final.w()) < 0.1) {
             RCLCPP_ERROR(get_logger(), "Invalid quaternion, please use a 9-axis IMU!");
             rclcpp::shutdown();
         }
@@ -349,46 +336,37 @@ public:
     }
 };
 
-
-sensor_msgs::msg::PointCloud2 publishCloud(rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr thisPub, pcl::PointCloud<PointType>::Ptr thisCloud, rclcpp::Time thisStamp, std::string thisFrame)
-{
+sensor_msgs::msg::PointCloud2 publishCloud(rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr thisPub, pcl::PointCloud<PointType>::Ptr thisCloud,
+                                           rclcpp::Time thisStamp, std::string thisFrame) {
     sensor_msgs::msg::PointCloud2 tempCloud;
     pcl::toROSMsg(*thisCloud, tempCloud);
     tempCloud.header.stamp = thisStamp;
     tempCloud.header.frame_id = thisFrame;
-    if (thisPub->get_subscription_count() != 0)
-        thisPub->publish(tempCloud);
+    if (thisPub->get_subscription_count() != 0) thisPub->publish(tempCloud);
     return tempCloud;
 }
 
-template<typename T>
-double stamp2Sec(const T& stamp)
-{
+template <typename T>
+double stamp2Sec(const T &stamp) {
     return rclcpp::Time(stamp).seconds();
 }
 
-
-template<typename T>
-void imuAngular2rosAngular(sensor_msgs::msg::Imu *thisImuMsg, T *angular_x, T *angular_y, T *angular_z)
-{
+template <typename T>
+void imuAngular2rosAngular(sensor_msgs::msg::Imu *thisImuMsg, T *angular_x, T *angular_y, T *angular_z) {
     *angular_x = thisImuMsg->angular_velocity.x;
     *angular_y = thisImuMsg->angular_velocity.y;
     *angular_z = thisImuMsg->angular_velocity.z;
 }
 
-
-template<typename T>
-void imuAccel2rosAccel(sensor_msgs::msg::Imu *thisImuMsg, T *acc_x, T *acc_y, T *acc_z)
-{
+template <typename T>
+void imuAccel2rosAccel(sensor_msgs::msg::Imu *thisImuMsg, T *acc_x, T *acc_y, T *acc_z) {
     *acc_x = thisImuMsg->linear_acceleration.x;
     *acc_y = thisImuMsg->linear_acceleration.y;
     *acc_z = thisImuMsg->linear_acceleration.z;
 }
 
-
-template<typename T>
-void imuRPY2rosRPY(sensor_msgs::msg::Imu *thisImuMsg, T *rosRoll, T *rosPitch, T *rosYaw)
-{
+template <typename T>
+void imuRPY2rosRPY(sensor_msgs::msg::Imu *thisImuMsg, T *rosRoll, T *rosPitch, T *rosYaw) {
     double imuRoll, imuPitch, imuYaw;
     tf2::Quaternion orientation;
     tf2::fromMsg(thisImuMsg->orientation, orientation);
@@ -399,73 +377,44 @@ void imuRPY2rosRPY(sensor_msgs::msg::Imu *thisImuMsg, T *rosRoll, T *rosPitch, T
     *rosYaw = imuYaw;
 }
 
+float pointDistance(PointType p) { return sqrt(p.x * p.x + p.y * p.y + p.z * p.z); }
 
-float pointDistance(PointType p)
-{
-    return sqrt(p.x*p.x + p.y*p.y + p.z*p.z);
-}
+float pointDistance(PointType p1, PointType p2) { return sqrt((p1.x - p2.x) * (p1.x - p2.x) + (p1.y - p2.y) * (p1.y - p2.y) + (p1.z - p2.z) * (p1.z - p2.z)); }
 
+rmw_qos_profile_t qos_profile{RMW_QOS_POLICY_HISTORY_KEEP_LAST,
+                              1,
+                              RMW_QOS_POLICY_RELIABILITY_BEST_EFFORT,
+                              RMW_QOS_POLICY_DURABILITY_VOLATILE,
+                              RMW_QOS_DEADLINE_DEFAULT,
+                              RMW_QOS_LIFESPAN_DEFAULT,
+                              RMW_QOS_POLICY_LIVELINESS_SYSTEM_DEFAULT,
+                              RMW_QOS_LIVELINESS_LEASE_DURATION_DEFAULT,
+                              false};
 
-float pointDistance(PointType p1, PointType p2)
-{
-    return sqrt((p1.x-p2.x)*(p1.x-p2.x) + (p1.y-p2.y)*(p1.y-p2.y) + (p1.z-p2.z)*(p1.z-p2.z));
-}
+auto qos = rclcpp::QoS(rclcpp::QoSInitialization(qos_profile.history, qos_profile.depth), qos_profile);
 
-rmw_qos_profile_t qos_profile{
-    RMW_QOS_POLICY_HISTORY_KEEP_LAST,
-    1,
-    RMW_QOS_POLICY_RELIABILITY_BEST_EFFORT,
-    RMW_QOS_POLICY_DURABILITY_VOLATILE,
-    RMW_QOS_DEADLINE_DEFAULT,
-    RMW_QOS_LIFESPAN_DEFAULT,
-    RMW_QOS_POLICY_LIVELINESS_SYSTEM_DEFAULT,
-    RMW_QOS_LIVELINESS_LEASE_DURATION_DEFAULT,
-    false
-};
+rmw_qos_profile_t qos_profile_imu{RMW_QOS_POLICY_HISTORY_KEEP_LAST,
+                                  2000,
+                                  RMW_QOS_POLICY_RELIABILITY_BEST_EFFORT,
+                                  RMW_QOS_POLICY_DURABILITY_VOLATILE,
+                                  RMW_QOS_DEADLINE_DEFAULT,
+                                  RMW_QOS_LIFESPAN_DEFAULT,
+                                  RMW_QOS_POLICY_LIVELINESS_SYSTEM_DEFAULT,
+                                  RMW_QOS_LIVELINESS_LEASE_DURATION_DEFAULT,
+                                  false};
 
-auto qos = rclcpp::QoS(
-    rclcpp::QoSInitialization(
-        qos_profile.history,
-        qos_profile.depth
-    ),
-    qos_profile);
+auto qos_imu = rclcpp::QoS(rclcpp::QoSInitialization(qos_profile_imu.history, qos_profile_imu.depth), qos_profile_imu);
 
-rmw_qos_profile_t qos_profile_imu{
-    RMW_QOS_POLICY_HISTORY_KEEP_LAST,
-    2000,
-    RMW_QOS_POLICY_RELIABILITY_BEST_EFFORT,
-    RMW_QOS_POLICY_DURABILITY_VOLATILE,
-    RMW_QOS_DEADLINE_DEFAULT,
-    RMW_QOS_LIFESPAN_DEFAULT,
-    RMW_QOS_POLICY_LIVELINESS_SYSTEM_DEFAULT,
-    RMW_QOS_LIVELINESS_LEASE_DURATION_DEFAULT,
-    false
-};
+rmw_qos_profile_t qos_profile_lidar{RMW_QOS_POLICY_HISTORY_KEEP_LAST,
+                                    5,
+                                    RMW_QOS_POLICY_RELIABILITY_BEST_EFFORT,
+                                    RMW_QOS_POLICY_DURABILITY_VOLATILE,
+                                    RMW_QOS_DEADLINE_DEFAULT,
+                                    RMW_QOS_LIFESPAN_DEFAULT,
+                                    RMW_QOS_POLICY_LIVELINESS_SYSTEM_DEFAULT,
+                                    RMW_QOS_LIVELINESS_LEASE_DURATION_DEFAULT,
+                                    false};
 
-auto qos_imu = rclcpp::QoS(
-    rclcpp::QoSInitialization(
-        qos_profile_imu.history,
-        qos_profile_imu.depth
-    ),
-    qos_profile_imu);
-
-rmw_qos_profile_t qos_profile_lidar{
-    RMW_QOS_POLICY_HISTORY_KEEP_LAST,
-    5,
-    RMW_QOS_POLICY_RELIABILITY_BEST_EFFORT,
-    RMW_QOS_POLICY_DURABILITY_VOLATILE,
-    RMW_QOS_DEADLINE_DEFAULT,
-    RMW_QOS_LIFESPAN_DEFAULT,
-    RMW_QOS_POLICY_LIVELINESS_SYSTEM_DEFAULT,
-    RMW_QOS_LIVELINESS_LEASE_DURATION_DEFAULT,
-    false
-};
-
-auto qos_lidar = rclcpp::QoS(
-    rclcpp::QoSInitialization(
-        qos_profile_lidar.history,
-        qos_profile_lidar.depth
-    ),
-    qos_profile_lidar);
+auto qos_lidar = rclcpp::QoS(rclcpp::QoSInitialization(qos_profile_lidar.history, qos_profile_lidar.depth), qos_profile_lidar);
 
 #endif

@@ -2,8 +2,8 @@
   ros__parameters:
 
     # Topics
-    pointCloudTopic: "livox/lidar"                   # Point cloud data
-    imuTopic: "livox/imu"                         # IMU data
+    pointCloudTopic: "livox/lidar_192_168_3_111"                   # Point cloud data
+    imuTopic: "livox/imu_192_168_3_111"                         # IMU data
     odomTopic: "odometry/imu"                    # IMU pre-preintegration odometry, same frequency as IMU
     gpsTopic: "odometry/gpsz"                    # GPS odometry topic from navsat, see module_navsat.launch file
 
@@ -30,7 +30,7 @@
     downsampleRate: 1                            # default: 1. Downsample your data if too many
     # points. i.e., 16 = 64 / 4, 16 = 16 / 1
     lidarMinRange: 1.0                           # default: 1.0, minimum lidar range to be used
-    lidarMaxRange: 40.0                        # default: 1000.0, maximum lidar range to be used
+    lidarMaxRange: 70.0                        # default: 1000.0, mid-360: 40m@10%  70m@80%  
 
     # IMU Settings
     imuAccNoise: 3.9939570888238808e-03
@@ -41,7 +41,7 @@
     imuGravity: 9.80511
     imuRPYWeight: 0.01
 
-    extrinsicTrans:  [ 0.0,  0.0,  0.0 ]
+    extrinsicTrans:  [ -0.011, -0.02329, 0.04412 ]
     extrinsicRot:    [1.0,  0.0,  0.0,
                        0.0,  1.0,  0.0,
                        0.0,  0.0, 1.0 ]

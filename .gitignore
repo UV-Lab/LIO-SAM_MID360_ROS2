@@ -1,0 +1,11 @@
+# folder
+# thirdparty/
+log/
+result/
+PCD/
+.vscode/
+build/
+*.obj
+*.pcd
+*.ply
+
