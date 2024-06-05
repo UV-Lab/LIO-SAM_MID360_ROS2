@@ -5,6 +5,8 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
   set(CMAKE_BUILD_TYPE Release)
 endif()
 
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -g -pthread -fopenmp")
+
 # find dependencies
 find_package(ament_cmake REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
@@ -27,6 +29,7 @@ find_package(OpenCV REQUIRED)
 find_package(PCL REQUIRED)
 find_package(GTSAM REQUIRED)
 find_package(Eigen REQUIRED)
+find_package(OpenMP REQUIRED)
 find_package(livox_ros_driver2 REQUIRED)
 
 include_directories(
@@ -57,7 +60,7 @@ add_executable(${PROJECT_NAME}_imageProjection src/imageProjection.cpp)
 add_executable(${PROJECT_NAME}_imuPreintegration src/imuPreintegration.cpp)
 target_link_libraries(${PROJECT_NAME}_imuPreintegration gtsam)
 
-add_executable(${PROJECT_NAME}_mapOptimization src/mapOptmization.cpp)
+add_executable(${PROJECT_NAME}_mapOptimization src/mapOptmization.cpp include/sc/Scancontext.cpp)
 target_link_libraries(${PROJECT_NAME}_mapOptimization gtsam)
 
 ament_target_dependencies(${PROJECT_NAME}_featureExtraction ${dependencies})

@@ -2,60 +2,36 @@
 #ifndef _UTILITY_LIDAR_ODOMETRY_H_
 #define _UTILITY_LIDAR_ODOMETRY_H_
 
-#include <iostream>
 #include <rclcpp/rclcpp.hpp>
 
 #include <std_msgs/msg/header.hpp>
-#include <std_msgs/msg/string.hpp>
 #include <std_msgs/msg/float64_multi_array.hpp>
 #include <sensor_msgs/msg/imu.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
 #include <sensor_msgs/msg/nav_sat_fix.hpp>
 #include <nav_msgs/msg/odometry.hpp>
 #include <nav_msgs/msg/path.hpp>
-#include <visualization_msgs/msg/marker.hpp>
-#include <visualization_msgs/msg/marker_array.hpp>
 
-#include <opencv2/opencv.hpp>
-
-#include <pcl/kdtree/kdtree_flann.h>  // pcl include kdtree_flann throws error if PCL_NO_PRECOMPILE
-                                      // is defined before
-#define PCL_NO_PRECOMPILE
+#include <pcl/kdtree/kdtree_flann.h>  
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
-#include <pcl/search/impl/search.hpp>
-#include <pcl/range_image/range_image.h>
 #include <pcl/common/common.h>
 #include <pcl/common/transforms.h>
-#include <pcl/registration/icp.h>
-#include <pcl/io/pcd_io.h>
-#include <pcl/filters/filter.h>
 #include <pcl/filters/voxel_grid.h>
-#include <pcl/filters/crop_box.h>
 #include <pcl_conversions/pcl_conversions.h>
 
 #include <tf2/LinearMath/Quaternion.h>
-#include <tf2_ros/transform_listener.h>
 #include <tf2_ros/transform_broadcaster.h>
 #include <tf2_eigen/tf2_eigen.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
+
 #include "livox_ros_driver2/msg/custom_msg.hpp"
 
+#include <iostream>
 #include <vector>
 #include <cmath>
-#include <algorithm>
-#include <queue>
-#include <deque>
-#include <iostream>
 #include <fstream>
-#include <ctime>
-#include <cfloat>
-#include <iterator>
-#include <sstream>
 #include <string>
-#include <limits>
-#include <iomanip>
-#include <array>
 #include <thread>
 #include <mutex>
 
@@ -336,8 +312,8 @@ public:
     }
 };
 
-sensor_msgs::msg::PointCloud2 publishCloud(rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr thisPub, pcl::PointCloud<PointType>::Ptr thisCloud,
-                                           rclcpp::Time thisStamp, std::string thisFrame) {
+inline sensor_msgs::msg::PointCloud2 publishCloud(rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr thisPub,
+                                                  pcl::PointCloud<PointType>::Ptr thisCloud, rclcpp::Time thisStamp, std::string thisFrame) {
     sensor_msgs::msg::PointCloud2 tempCloud;
     pcl::toROSMsg(*thisCloud, tempCloud);
     tempCloud.header.stamp = thisStamp;
@@ -351,35 +327,13 @@ double stamp2Sec(const T &stamp) {
     return rclcpp::Time(stamp).seconds();
 }
 
-template <typename T>
-void imuAngular2rosAngular(sensor_msgs::msg::Imu *thisImuMsg, T *angular_x, T *angular_y, T *angular_z) {
-    *angular_x = thisImuMsg->angular_velocity.x;
-    *angular_y = thisImuMsg->angular_velocity.y;
-    *angular_z = thisImuMsg->angular_velocity.z;
+
+
+inline float pointDistance(PointType p) { return sqrt(p.x * p.x + p.y * p.y + p.z * p.z); }
+
+inline float pointDistance(PointType p1, PointType p2) {
+    return sqrt((p1.x - p2.x) * (p1.x - p2.x) + (p1.y - p2.y) * (p1.y - p2.y) + (p1.z - p2.z) * (p1.z - p2.z));
 }
-
-template <typename T>
-void imuAccel2rosAccel(sensor_msgs::msg::Imu *thisImuMsg, T *acc_x, T *acc_y, T *acc_z) {
-    *acc_x = thisImuMsg->linear_acceleration.x;
-    *acc_y = thisImuMsg->linear_acceleration.y;
-    *acc_z = thisImuMsg->linear_acceleration.z;
-}
-
-template <typename T>
-void imuRPY2rosRPY(sensor_msgs::msg::Imu *thisImuMsg, T *rosRoll, T *rosPitch, T *rosYaw) {
-    double imuRoll, imuPitch, imuYaw;
-    tf2::Quaternion orientation;
-    tf2::fromMsg(thisImuMsg->orientation, orientation);
-    tf2::Matrix3x3(orientation).getRPY(imuRoll, imuPitch, imuYaw);
-
-    *rosRoll = imuRoll;
-    *rosPitch = imuPitch;
-    *rosYaw = imuYaw;
-}
-
-float pointDistance(PointType p) { return sqrt(p.x * p.x + p.y * p.y + p.z * p.z); }
-
-float pointDistance(PointType p1, PointType p2) { return sqrt((p1.x - p2.x) * (p1.x - p2.x) + (p1.y - p2.y) * (p1.y - p2.y) + (p1.z - p2.z) * (p1.z - p2.z)); }
 
 rmw_qos_profile_t qos_profile{RMW_QOS_POLICY_HISTORY_KEEP_LAST,
                               1,

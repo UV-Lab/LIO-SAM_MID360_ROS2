@@ -1,5 +1,7 @@
 #include "utility.hpp"
 #include "lio_sam/msg/cloud_info.hpp"
+#include <pcl/range_image/range_image.h>
+#include <opencv2/opencv.hpp>
 
 struct VelodynePointXYZIRT {
     PCL_ADD_POINT4D
@@ -41,6 +43,35 @@ POINT_CLOUD_REGISTER_POINT_STRUCT(OusterPointXYZIRT,
 using PointXYZIRT = LiovxPointCustomMsg;
 
 const int queueLength = 2000;
+
+
+
+template <typename T>
+void imuAngular2rosAngular(sensor_msgs::msg::Imu *thisImuMsg, T *angular_x, T *angular_y, T *angular_z) {
+    *angular_x = thisImuMsg->angular_velocity.x;
+    *angular_y = thisImuMsg->angular_velocity.y;
+    *angular_z = thisImuMsg->angular_velocity.z;
+}
+
+template <typename T>
+void imuAccel2rosAccel(sensor_msgs::msg::Imu *thisImuMsg, T *acc_x, T *acc_y, T *acc_z) {
+    *acc_x = thisImuMsg->linear_acceleration.x;
+    *acc_y = thisImuMsg->linear_acceleration.y;
+    *acc_z = thisImuMsg->linear_acceleration.z;
+}
+
+template <typename T>
+void imuRPY2rosRPY(sensor_msgs::msg::Imu *thisImuMsg, T *rosRoll, T *rosPitch, T *rosYaw) {
+    double imuRoll, imuPitch, imuYaw;
+    tf2::Quaternion orientation;
+    tf2::fromMsg(thisImuMsg->orientation, orientation);
+    tf2::Matrix3x3(orientation).getRPY(imuRoll, imuPitch, imuYaw);
+
+    *rosRoll = imuRoll;
+    *rosPitch = imuPitch;
+    *rosYaw = imuYaw;
+}
+
 
 class ImageProjection : public ParamServer {
 private:
