@@ -39,7 +39,15 @@ using namespace std;
 
 typedef pcl::PointXYZI PointType;
 
+using CloudType = pcl::PointCloud<PointType>;
+using CloudPtr = pcl::PointCloud<PointType>::Ptr;
+using PointVector = std::vector<PointType, Eigen::aligned_allocator<PointType>>;
+
 enum class SensorType { VELODYNE, OUSTER, LIVOX };
+
+#include <chrono>
+#define GET_TIME() std::chrono::high_resolution_clock::now()
+#define GET_USED(t2, t1) std::chrono::duration<double>(t2 - t1).count()
 
 class ParamServer : public rclcpp::Node {
 public:
