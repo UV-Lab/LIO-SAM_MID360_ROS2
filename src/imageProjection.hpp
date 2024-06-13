@@ -44,8 +44,6 @@ using PointXYZIRT = LiovxPointCustomMsg;
 
 const int queueLength = 2000;
 
-
-
 template <typename T>
 void imuAngular2rosAngular(sensor_msgs::msg::Imu *thisImuMsg, T *angular_x, T *angular_y, T *angular_z) {
     *angular_x = thisImuMsg->angular_velocity.x;
@@ -72,25 +70,24 @@ void imuRPY2rosRPY(sensor_msgs::msg::Imu *thisImuMsg, T *rosRoll, T *rosPitch, T
     *rosYaw = imuYaw;
 }
 
-
 class ImageProjection : public ParamServer {
 private:
     std::mutex imuLock;
     std::mutex odoLock;
 
-    rclcpp::Subscription<livox_ros_driver2::msg::CustomMsg>::SharedPtr subLaserCloud;
-    rclcpp::CallbackGroup::SharedPtr callbackGroupLidar;
-    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubLaserCloud;
+    // rclcpp::Subscription<livox_ros_driver2::msg::CustomMsg>::SharedPtr subLaserCloud;
+    // rclcpp::CallbackGroup::SharedPtr callbackGroupLidar;
+    // rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubLaserCloud;
 
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubExtractedCloud;
-    rclcpp::Publisher<lio_sam::msg::CloudInfo>::SharedPtr pubLaserCloudInfo;
+    // rclcpp::Publisher<lio_sam::msg::CloudInfo>::SharedPtr pubLaserCloudInfo;
 
-    rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr subImu;
-    rclcpp::CallbackGroup::SharedPtr callbackGroupImu;
+    // rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr subImu;
+    // rclcpp::CallbackGroup::SharedPtr callbackGroupImu;
     std::deque<sensor_msgs::msg::Imu> imuQueue;
 
-    rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr subOdom;
-    rclcpp::CallbackGroup::SharedPtr callbackGroupOdom;
+    // rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr subOdom;
+    // rclcpp::CallbackGroup::SharedPtr callbackGroupOdom;
     std::deque<nav_msgs::msg::Odometry> odomQueue;
 
     std::deque<livox_ros_driver2::msg::CustomMsg> cloudQueue;
@@ -118,7 +115,6 @@ private:
     float odomIncreY;
     float odomIncreZ;
 
-    lio_sam::msg::CloudInfo cloudInfo;
     double timeScanCur;
     double timeScanEnd;
     std_msgs::msg::Header cloudHeader;
@@ -126,26 +122,29 @@ private:
     vector<int> columnIdnCountVec;
 
 public:
-    ImageProjection(const rclcpp::NodeOptions &options) : ParamServer("lio_sam_imageProjection", options), deskewFlag(0) {
-        callbackGroupLidar = create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
-        callbackGroupImu = create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
-        callbackGroupOdom = create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
+    lio_sam::msg::CloudInfo cloudInfo;
 
-        auto lidarOpt = rclcpp::SubscriptionOptions();
-        lidarOpt.callback_group = callbackGroupLidar;
-        auto imuOpt = rclcpp::SubscriptionOptions();
-        imuOpt.callback_group = callbackGroupImu;
-        auto odomOpt = rclcpp::SubscriptionOptions();
-        odomOpt.callback_group = callbackGroupOdom;
+    ImageProjection() : ParamServer(), deskewFlag(0) {
+        // callbackGroupLidar = create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
+        // callbackGroupImu = create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
+        // callbackGroupOdom = create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
 
-        subImu = create_subscription<sensor_msgs::msg::Imu>(imuTopic, qos_imu, std::bind(&ImageProjection::imuHandler, this, std::placeholders::_1), imuOpt);
-        subOdom = create_subscription<nav_msgs::msg::Odometry>(odomTopic + "_incremental", qos_imu,
-                                                               std::bind(&ImageProjection::odometryHandler, this, std::placeholders::_1), odomOpt);
-        subLaserCloud = create_subscription<livox_ros_driver2::msg::CustomMsg>(
-            pointCloudTopic, qos_lidar, std::bind(&ImageProjection::cloudHandler, this, std::placeholders::_1), lidarOpt);
+        // auto lidarOpt = rclcpp::SubscriptionOptions();
+        // lidarOpt.callback_group = callbackGroupLidar;
+        // auto imuOpt = rclcpp::SubscriptionOptions();
+        // imuOpt.callback_group = callbackGroupImu;
+        // auto odomOpt = rclcpp::SubscriptionOptions();
+        // odomOpt.callback_group = callbackGroupOdom;
+
+        // subImu = create_subscription<sensor_msgs::msg::Imu>(imuTopic, qos_imu, std::bind(&ImageProjection::imuHandler, this, std::placeholders::_1), imuOpt);
+        // subOdom = create_subscription<nav_msgs::msg::Odometry>(odomTopic + "_incremental", qos_imu,
+        //                                                        std::bind(&ImageProjection::odometryHandler, this, std::placeholders::_1), odomOpt);
+        // subLaserCloud = create_subscription<livox_ros_driver2::msg::CustomMsg>(
+        //     pointCloudTopic, qos_lidar, std::bind(&ImageProjection::cloudHandler, this, std::placeholders::_1), lidarOpt);
 
         pubExtractedCloud = create_publisher<sensor_msgs::msg::PointCloud2>("lio_sam/deskew/cloud_deskewed", 1);
-        pubLaserCloudInfo = create_publisher<lio_sam::msg::CloudInfo>("lio_sam/deskew/cloud_info", qos);
+
+        // pubLaserCloudInfo = create_publisher<lio_sam::msg::CloudInfo>("lio_sam/deskew/cloud_info", qos);
 
         allocateMemory();
         resetParameters();
@@ -167,7 +166,7 @@ public:
         cloudInfo.point_col_ind.assign(N_SCAN * Horizon_SCAN, 0);
         cloudInfo.point_range.assign(N_SCAN * Horizon_SCAN, 0);
 
-        resetParameters();
+        // resetParameters();
     }
 
     void resetParameters() {
@@ -221,10 +220,10 @@ public:
         odomQueue.push_back(*odometryMsg);
     }
 
-    void cloudHandler(const livox_ros_driver2::msg::CustomMsg::SharedPtr laserCloudMsg) {
-        if (!cachePointCloud(laserCloudMsg)) return;
+    bool cloudHandler(const livox_ros_driver2::msg::CustomMsg::SharedPtr laserCloudMsg) {
+        if (!cachePointCloud(laserCloudMsg)) return false;
 
-        if (!deskewInfo()) return;
+        if (!deskewInfo()) return false;
 
         projectPointCloud();
 
@@ -233,6 +232,8 @@ public:
         publishClouds();
 
         resetParameters();
+
+        return true;
     }
 
     void moveFromCustomMsg(livox_ros_driver2::msg::CustomMsg &Msg, pcl::PointCloud<PointXYZIRT> &cloud) {
@@ -604,24 +605,24 @@ public:
     void publishClouds() {
         cloudInfo.header = cloudHeader;
         cloudInfo.cloud_deskewed = publishCloud(pubExtractedCloud, extractedCloud, cloudHeader.stamp, lidarFrame);
-        pubLaserCloudInfo->publish(cloudInfo);
+        // pubLaserCloudInfo->publish(cloudInfo);
     }
 };
 
-int main(int argc, char **argv) {
-    rclcpp::init(argc, argv);
+// int main(int argc, char **argv) {
+//     rclcpp::init(argc, argv);
 
-    rclcpp::NodeOptions options;
-    options.use_intra_process_comms(true);
-    rclcpp::executors::MultiThreadedExecutor exec;
+//     rclcpp::NodeOptions options;
+//     options.use_intra_process_comms(true);
+//     rclcpp::executors::MultiThreadedExecutor exec;
 
-    auto IP = std::make_shared<ImageProjection>(options);
-    exec.add_node(IP);
+//     auto IP = std::make_shared<ImageProjection>(options);
+//     exec.add_node(IP);
 
-    RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "\033[1;32m----> Image Projection Started.\033[0m");
+//     RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "\033[1;32m----> Image Projection Started.\033[0m");
 
-    exec.spin();
+//     exec.spin();
 
-    rclcpp::shutdown();
-    return 0;
-}
+//     rclcpp::shutdown();
+//     return 0;
+// }

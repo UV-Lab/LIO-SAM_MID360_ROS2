@@ -12,9 +12,9 @@ struct by_value {
 
 class FeatureExtraction : public ParamServer {
 public:
-    rclcpp::Subscription<lio_sam::msg::CloudInfo>::SharedPtr subLaserCloudInfo;
+    // rclcpp::Subscription<lio_sam::msg::CloudInfo>::SharedPtr subLaserCloudInfo;
 
-    rclcpp::Publisher<lio_sam::msg::CloudInfo>::SharedPtr pubLaserCloudInfo;
+    // rclcpp::Publisher<lio_sam::msg::CloudInfo>::SharedPtr pubLaserCloudInfo;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubCornerPoints;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubSurfacePoints;
 
@@ -32,11 +32,11 @@ public:
     int *cloudNeighborPicked;
     int *cloudLabel;
 
-    FeatureExtraction(const rclcpp::NodeOptions &options) : ParamServer("lio_sam_featureExtraction", options) {
-        subLaserCloudInfo = create_subscription<lio_sam::msg::CloudInfo>("lio_sam/deskew/cloud_info", qos,
-                                                                         std::bind(&FeatureExtraction::laserCloudInfoHandler, this, std::placeholders::_1));
-
-        pubLaserCloudInfo = create_publisher<lio_sam::msg::CloudInfo>("lio_sam/feature/cloud_info", qos);
+    FeatureExtraction() : ParamServer() {
+        // subLaserCloudInfo = create_subscription<lio_sam::msg::CloudInfo>("lio_sam/deskew/cloud_info", qos,
+        //                                                                  std::bind(&FeatureExtraction::FeatureExtractionHandler, this,
+        //                                                                  std::placeholders::_1));
+        // pubLaserCloudInfo = create_publisher<lio_sam::msg::CloudInfo>("lio_sam/feature/cloud_info", qos);
         pubCornerPoints = create_publisher<sensor_msgs::msg::PointCloud2>("lio_sam/feature/cloud_corner", 1);
         pubSurfacePoints = create_publisher<sensor_msgs::msg::PointCloud2>("lio_sam/feature/cloud_surface", 1);
 
@@ -57,10 +57,11 @@ public:
         cloudLabel = new int[N_SCAN * Horizon_SCAN];
     }
 
-    void laserCloudInfoHandler(const lio_sam::msg::CloudInfo::SharedPtr msgIn) {
-        cloudInfo = *msgIn;                                       // new cloud info
-        cloudHeader = msgIn->header;                              // new cloud header
-        pcl::fromROSMsg(msgIn->cloud_deskewed, *extractedCloud);  // new cloud for extraction
+    void FeatureExtractionHandler(lio_sam::msg::CloudInfo &msgIn) {
+        // cloudInfo = std::move(msgIn);                                // new cloud info
+        cloudInfo = msgIn;
+        cloudHeader = cloudInfo.header;                              // new cloud header
+        pcl::fromROSMsg(cloudInfo.cloud_deskewed, *extractedCloud);  // new cloud for extraction
 
         calculateSmoothness();
 
@@ -222,24 +223,24 @@ public:
         cloudInfo.cloud_corner = publishCloud(pubCornerPoints, cornerCloud, cloudHeader.stamp, lidarFrame);
         cloudInfo.cloud_surface = publishCloud(pubSurfacePoints, surfaceCloud, cloudHeader.stamp, lidarFrame);
         // publish to mapOptimization
-        pubLaserCloudInfo->publish(cloudInfo);
+        // pubLaserCloudInfo->publish(cloudInfo);
     }
 };
 
-int main(int argc, char **argv) {
-    rclcpp::init(argc, argv);
-    rclcpp::NodeOptions options;
-    options.use_intra_process_comms(true);
-    rclcpp::executors::SingleThreadedExecutor exec;
+// int main(int argc, char **argv) {
+//     rclcpp::init(argc, argv);
+//     rclcpp::NodeOptions options;
+//     options.use_intra_process_comms(true);
+//     rclcpp::executors::SingleThreadedExecutor exec;
 
-    auto FE = std::make_shared<FeatureExtraction>(options);
+//     auto FE = std::make_shared<FeatureExtraction>(options);
 
-    exec.add_node(FE);
+//     exec.add_node(FE);
 
-    RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "\033[1;32m----> Feature Extraction Started.\033[0m");
+//     RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "\033[1;32m----> Feature Extraction Started.\033[0m");
 
-    exec.spin();
+//     exec.spin();
 
-    rclcpp::shutdown();
-    return 0;
-}
+//     rclcpp::shutdown();
+//     return 0;
+// }

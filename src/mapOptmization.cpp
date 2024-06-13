@@ -27,6 +27,9 @@
 #include <visualization_msgs/msg/marker.hpp>
 #include <visualization_msgs/msg/marker_array.hpp>
 
+#include "imageProjection.hpp"
+#include "featureExtraction.hpp"
+
 using namespace gtsam;
 
 using symbol_shorthand::B;  // Bias  (ax,ay,az,gx,gy,gz)
@@ -76,7 +79,7 @@ public:
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pubLoopConstraintEdge;
 
     rclcpp::Service<lio_sam::srv::SaveMap>::SharedPtr srvSaveMap;
-    rclcpp::Subscription<lio_sam::msg::CloudInfo>::SharedPtr subCloud;
+    rclcpp::Subscription<livox_ros_driver2::msg::CustomMsg>::SharedPtr subCloud;
     rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr subGPS;
     rclcpp::Subscription<std_msgs::msg::Float64MultiArray>::SharedPtr subLoop;
 
@@ -154,13 +157,19 @@ public:
 
     std::unique_ptr<tf2_ros::TransformBroadcaster> br;
 
+    FeatureExtraction featureExtraction;
+    ImageProjection imageProjection;
+
+    rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr subImu;
+    rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr subOdom;
+
     /////////////////////////////////// SC Start ///////////////////////////////////
     SCManager scManager;
     pcl::PointCloud<PointType>::Ptr laserCloudRaw{new pcl::PointCloud<PointType>()};    // giseop
     pcl::PointCloud<PointType>::Ptr laserCloudRawDS{new pcl::PointCloud<PointType>()};  // giseop
     /////////////////////////////////// SC End ///////////////////////////////////
 
-    mapOptimization(const rclcpp::NodeOptions& options) : ParamServer("lio_sam_mapOptimization", options) {
+    mapOptimization(const rclcpp::NodeOptions& options) : ParamServer() {
         ISAM2Params parameters;
         parameters.relinearizeThreshold = 0.1;
         parameters.relinearizeSkip = 1;
@@ -173,8 +182,13 @@ public:
         pubPath = create_publisher<nav_msgs::msg::Path>("lio_sam/mapping/path", 1);
         br = std::make_unique<tf2_ros::TransformBroadcaster>(this);
 
-        subCloud = create_subscription<lio_sam::msg::CloudInfo>("lio_sam/feature/cloud_info", qos,
-                                                                std::bind(&mapOptimization::laserCloudInfoHandler, this, std::placeholders::_1));
+        subImu = create_subscription<sensor_msgs::msg::Imu>(imuTopic, qos_imu,
+                                                            [this](const sensor_msgs::msg::Imu::SharedPtr msg) { imageProjection.imuHandler(msg); });
+        subOdom = create_subscription<nav_msgs::msg::Odometry>(odomTopic + "_incremental", qos_imu,
+                                                               [this](const nav_msgs::msg::Odometry::SharedPtr msg) { imageProjection.odometryHandler(msg); });
+
+        subCloud = create_subscription<livox_ros_driver2::msg::CustomMsg>(pointCloudTopic, qos_lidar,
+                                                                          std::bind(&mapOptimization::laserCloudInfoHandler, this, std::placeholders::_1));
         subGPS = create_subscription<nav_msgs::msg::Odometry>(gpsTopic, 200, std::bind(&mapOptimization::gpsHandler, this, std::placeholders::_1));
         subLoop = create_subscription<std_msgs::msg::Float64MultiArray>("lio_loop/loop_closure_detection", qos,
                                                                         std::bind(&mapOptimization::loopInfoHandler, this, std::placeholders::_1));
@@ -312,16 +326,21 @@ public:
 
     /////////////////////////////////// Loc End ///////////////////////////////////
 
-    void laserCloudInfoHandler(const lio_sam::msg::CloudInfo::SharedPtr msgIn) {
+    void laserCloudInfoHandler(const livox_ros_driver2::msg::CustomMsg::SharedPtr msgIn) {
+        if (imageProjection.cloudHandler(msgIn) == false) return;
+
+        featureExtraction.FeatureExtractionHandler(imageProjection.cloudInfo);
+
+        cloudInfo = std::move(featureExtraction.cloudInfo);
+
         // extract time stamp
-        timeLaserInfoStamp = msgIn->header.stamp;
-        timeLaserInfoCur = stamp2Sec(msgIn->header.stamp);
+        timeLaserInfoStamp = cloudInfo.header.stamp;
+        timeLaserInfoCur = stamp2Sec(cloudInfo.header.stamp);
 
         // extract info and feature cloud
-        cloudInfo = *msgIn;
-        pcl::fromROSMsg(msgIn->cloud_corner, *laserCloudCornerLast);
-        pcl::fromROSMsg(msgIn->cloud_surface, *laserCloudSurfLast);
-        pcl::fromROSMsg(msgIn->cloud_deskewed, *laserCloudRaw);
+        pcl::fromROSMsg(cloudInfo.cloud_corner, *laserCloudCornerLast);
+        pcl::fromROSMsg(cloudInfo.cloud_surface, *laserCloudSurfLast);
+        pcl::fromROSMsg(cloudInfo.cloud_deskewed, *laserCloudRaw);
 
         std::lock_guard<std::mutex> lock(mtx);
 
@@ -1043,13 +1062,16 @@ public:
             pt.intensity = cloudKeyPoses3D->points[pointSearchInd[0]].intensity;
         }
 
-        // also extract some latest key frames in case the robot rotates in one position
-        int numPoses = cloudKeyPoses3D->size();
-        for (int i = numPoses - 1; i >= 0; --i) {
-            if (timeLaserInfoCur - cloudKeyPoses6D->points[i].time < 10.0)
-                surroundingKeyPosesDS->push_back(cloudKeyPoses3D->points[i]);
-            else
-                break;
+        // 定位模式不再提取
+        if (LocEnableFlag == false) {
+            // also extract some latest key frames in case the robot rotates in one position
+            int numPoses = cloudKeyPoses3D->size();
+            for (int i = numPoses - 1; i >= 0; --i) {
+                if (timeLaserInfoCur - cloudKeyPoses6D->points[i].time < 10.0)
+                    surroundingKeyPosesDS->push_back(cloudKeyPoses3D->points[i]);
+                else
+                    break;
+            }
         }
 
         extractCloud(surroundingKeyPosesDS);

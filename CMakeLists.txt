@@ -53,30 +53,33 @@ set(dependencies
 
 rosidl_generate_interfaces(${PROJECT_NAME} "msg/CloudInfo.msg" "srv/SaveMap.srv" DEPENDENCIES std_msgs sensor_msgs geometry_msgs)
 
-add_executable(${PROJECT_NAME}_featureExtraction src/featureExtraction.cpp)
+# add_executable(${PROJECT_NAME}_featureExtraction src/featureExtraction.cpp)
 
-add_executable(${PROJECT_NAME}_imageProjection src/imageProjection.cpp)
+# add_executable(${PROJECT_NAME}_imageProjection src/imageProjection.cpp)
 
 add_executable(${PROJECT_NAME}_imuPreintegration src/imuPreintegration.cpp)
 target_link_libraries(${PROJECT_NAME}_imuPreintegration gtsam)
 
-add_executable(${PROJECT_NAME}_mapOptimization src/mapOptmization.cpp include/sc/Scancontext.cpp)
+add_executable(${PROJECT_NAME}_mapOptimization 
+  src/mapOptmization.cpp 
+  include/sc/Scancontext.cpp
+)
 target_link_libraries(${PROJECT_NAME}_mapOptimization gtsam)
 
-ament_target_dependencies(${PROJECT_NAME}_featureExtraction ${dependencies})
-ament_target_dependencies(${PROJECT_NAME}_imageProjection ${dependencies})
+# ament_target_dependencies(${PROJECT_NAME}_featureExtraction ${dependencies})
+# ament_target_dependencies(${PROJECT_NAME}_imageProjection ${dependencies})
 ament_target_dependencies(${PROJECT_NAME}_imuPreintegration ${dependencies})
 ament_target_dependencies(${PROJECT_NAME}_mapOptimization ${dependencies})
 
-rosidl_target_interfaces(${PROJECT_NAME}_featureExtraction ${PROJECT_NAME} "rosidl_typesupport_cpp")
-rosidl_target_interfaces(${PROJECT_NAME}_imageProjection ${PROJECT_NAME} "rosidl_typesupport_cpp")
+# rosidl_target_interfaces(${PROJECT_NAME}_featureExtraction ${PROJECT_NAME} "rosidl_typesupport_cpp")
+# rosidl_target_interfaces(${PROJECT_NAME}_imageProjection ${PROJECT_NAME} "rosidl_typesupport_cpp")
 rosidl_target_interfaces(${PROJECT_NAME}_imuPreintegration ${PROJECT_NAME} "rosidl_typesupport_cpp")
 rosidl_target_interfaces(${PROJECT_NAME}_mapOptimization ${PROJECT_NAME} "rosidl_typesupport_cpp")
 
 install(DIRECTORY launch config DESTINATION share/${PROJECT_NAME})
 
-install(TARGETS ${PROJECT_NAME}_featureExtraction DESTINATION lib/${PROJECT_NAME})
-install(TARGETS ${PROJECT_NAME}_imageProjection DESTINATION lib/${PROJECT_NAME})
+# install(TARGETS ${PROJECT_NAME}_featureExtraction DESTINATION lib/${PROJECT_NAME})
+# install(TARGETS ${PROJECT_NAME}_imageProjection DESTINATION lib/${PROJECT_NAME})
 install(TARGETS ${PROJECT_NAME}_imuPreintegration DESTINATION lib/${PROJECT_NAME})
 install(TARGETS ${PROJECT_NAME}_mapOptimization DESTINATION lib/${PROJECT_NAME})
 

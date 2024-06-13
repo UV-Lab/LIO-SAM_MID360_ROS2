@@ -15,7 +15,6 @@
 
 #include <tf2_ros/transform_listener.h>
 
-
 #include "utility.hpp"
 
 using gtsam::symbol_shorthand::B;  // Bias  (ax,ay,az,gx,gy,gz)
@@ -47,7 +46,7 @@ public:
     double lidarOdomTime = -1;
     deque<nav_msgs::msg::Odometry> imuOdomQueue;
 
-    TransformFusion(const rclcpp::NodeOptions& options) : ParamServer("lio_sam_transformFusion", options) {
+    TransformFusion(const rclcpp::NodeOptions& options) : ParamServer() {
         tfBuffer = std::make_shared<tf2_ros::Buffer>(get_clock());
         tfListener = std::make_shared<tf2_ros::TransformListener>(*tfBuffer);
 
@@ -199,7 +198,7 @@ public:
     gtsam::Pose3 imu2Lidar = gtsam::Pose3(gtsam::Rot3(1, 0, 0, 0), gtsam::Point3(-extTrans.x(), -extTrans.y(), -extTrans.z()));
     gtsam::Pose3 lidar2Imu = gtsam::Pose3(gtsam::Rot3(1, 0, 0, 0), gtsam::Point3(extTrans.x(), extTrans.y(), extTrans.z()));
 
-    IMUPreintegration(const rclcpp::NodeOptions& options) : ParamServer("lio_sam_imu_preintegration", options) {
+    IMUPreintegration(const rclcpp::NodeOptions& options) : ParamServer() {
         callbackGroupImu = create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
         callbackGroupOdom = create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
 

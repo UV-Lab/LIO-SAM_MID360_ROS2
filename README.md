@@ -8,6 +8,10 @@
 
 - 1.2 - 6.5 - add loc
 
+- 1.3 - 6.6 - fix loc extractCloud bug, mapOptmization:1047
+
+- 1.4 - 6.13 - merge featureExtraction & imageProjection & mapOptimization
+
 
 ## Tips
 
