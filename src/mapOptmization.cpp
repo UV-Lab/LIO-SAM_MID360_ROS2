@@ -297,13 +297,13 @@ public:
     }
 
     void LoadPriorMap() {
-        std::cout << "loading map: " << loadPCDDirectory << std::endl;
         cloudKeyPoses6D->clear();
         cloudKeyPoses3D->clear();
         pcl::io::loadPCDFile<PointTypePose>(loadPCDDirectory + "/transformations.pcd", *cloudKeyPoses6D);
         pcl::io::loadPCDFile<PointType>(loadPCDDirectory + "/trajectory.pcd", *cloudKeyPoses3D);
         kdtreeSurroundingKeyPoses->setInputCloud(cloudKeyPoses3D);
 
+        std::cout << "loading map [ " << cloudKeyPoses6D->size() << " ] from " << loadPCDDirectory << std::endl;
         for (int i = 0; i < cloudKeyPoses6D->size(); i++) {
             CloudPtr cornerKeyFrame(new CloudType());
             CloudPtr surfKeyFrame(new CloudType());
@@ -311,8 +311,6 @@ public:
             pcl::io::loadPCDFile<PointType>(loadPCDDirectory + "/SurfMap/" + std::to_string(i) + ".pcd", *surfKeyFrame);
             cornerCloudKeyFrames.push_back(cornerKeyFrame);
             surfCloudKeyFrames.push_back(surfKeyFrame);
-
-            if (i % 100 == 0) std::cout << "\r" << std::flush << "Loading feature cloud : " << i << " ...\n";
         }
         printf("************************Keyframe map loaded************************");
     }
@@ -361,7 +359,10 @@ public:
 
             auto t1 = GET_TIME();
 
-            extractSurroundingKeyFrames();
+            if (LocEnableFlag)
+                extractNearbyLoc();
+            else
+                extractSurroundingKeyFrames();
 
             downsampleCurrentScan();
 
@@ -381,9 +382,9 @@ public:
 
             publishOdometry();
 
-            publishFrames();
-
             if (useRviz) {
+                publishFrames();
+
                 publishCloud(pubExtractedCloud, cloudInfo.cloud_deskewed, cloudInfo.header.stamp, lidarFrame);
                 publishCloud(pubCornerPoints, cloudInfo.cloud_corner, cloudInfo.header.stamp, lidarFrame);
                 publishCloud(pubSurfacePoints, cloudInfo.cloud_surface, cloudInfo.header.stamp, lidarFrame);
@@ -516,12 +517,10 @@ public:
         }
     }
     void visualizeGlobalMapThread() {
-        if (LocEnableFlag == true) return;  // 定位模式，不使用
-
         rclcpp::Rate rate(0.2);
         while (rclcpp::ok()) {
             rate.sleep();
-            publishGlobalMap();
+            if (LocEnableFlag == false) publishGlobalMap();  // 定位模式，不使用
         }
         if (savePCD == false) return;
         cout << "****************************************************" << endl;
@@ -1035,74 +1034,91 @@ public:
         }
     }
 
-    void extractForLoopClosure() {
-        pcl::PointCloud<PointType>::Ptr cloudToExtract(new pcl::PointCloud<PointType>());
+    // void extractForLoopClosure() {
+    //     pcl::PointCloud<PointType>::Ptr cloudToExtract(new pcl::PointCloud<PointType>());
+    //     int numPoses = cloudKeyPoses3D->size();
+    //     for (int i = numPoses - 1; i >= 0; --i) {
+    //         if ((int)cloudToExtract->size() <= surroundingKeyframeSize)
+    //             cloudToExtract->push_back(cloudKeyPoses3D->points[i]);
+    //         else
+    //             break;
+    //     }
+
+    //     extractCloud(cloudToExtract);
+    // }
+
+    void extractNearbyLoc() {
+        // extract all the nearby key poses and downsample them
+        std::vector<int> pointSearchInd;
+        std::vector<float> pointSearchSqDis;
+        kdtreeSurroundingKeyPoses->radiusSearch(lastPoses3D, (double)surroundingKeyframeSearchRadius, pointSearchInd, pointSearchSqDis);
+        if (pointSearchInd.size() > surroundingKeyframeSearchMaxNum) pointSearchInd.resize(surroundingKeyframeSearchMaxNum);  // 大于Num进行截断
+
+        // 去掉了降采样，挺没必要的操作
+
+        // 缓存，当前后两次地图一样时，使用上次的地图
+        static std::vector<int> last_searchInd;
+        std::sort(pointSearchInd.begin(), pointSearchInd.end());  // 首先对两个向量进行排序
+
+        if (last_searchInd.size()) {
+            std::vector<int> extra_in_cur;
+            std::vector<int> missing_in_cur;
+            // 计算 searchInd 相对于 last_searchInd 多出的元素
+            std::set_difference(pointSearchInd.begin(), pointSearchInd.end(), last_searchInd.begin(), last_searchInd.end(), std::back_inserter(extra_in_cur));
+            // 计算 searchInd 相对于 last_searchInd 少了的元素
+            std::set_difference(last_searchInd.begin(), last_searchInd.end(), pointSearchInd.begin(), pointSearchInd.end(), std::back_inserter(missing_in_cur));
+            // 如果仅缺少一个，也没必要重构，补上去
+            if (extra_in_cur.empty() && missing_in_cur.size() == 1) pointSearchInd.push_back(missing_in_cur[0]);
+            // 查看前后两次缓存是否一样
+            if (std::equal(pointSearchInd.begin(), pointSearchInd.end(), last_searchInd.begin())) {
+                // 如果相同，使用上次的缓存
+            } else {
+                extractCloud(pointSearchInd);  // 重新累计地图点云
+            }
+        } else {
+            extractCloud(pointSearchInd);  // 初始
+        }
+        // 更新
+        last_searchInd = pointSearchInd;
+    }
+
+    void extractNearby() {
+        // extract all the nearby key poses and downsample them
+        std::vector<int> pointSearchInd;
+        std::vector<float> pointSearchSqDis;
+        kdtreeSurroundingKeyPoses->setInputCloud(cloudKeyPoses3D);  // create kd-tree
+        kdtreeSurroundingKeyPoses->radiusSearch(cloudKeyPoses3D->back(), (double)surroundingKeyframeSearchRadius, pointSearchInd, pointSearchSqDis);
+
+        pcl::PointCloud<PointType>::Ptr surroundingKeyPoses(new pcl::PointCloud<PointType>());
+        for (int i = 0; i < (int)pointSearchInd.size(); ++i) {
+            surroundingKeyPoses->push_back(cloudKeyPoses3D->points[pointSearchInd[i]]);
+        }
+
+        std::vector<int> extractInd;
+        downSizeFilterSurroundingKeyPoses.setInputCloud(surroundingKeyPoses);
+        downSizeFilterSurroundingKeyPoses.filter(*surroundingKeyPoses);
+        for (auto& pt : surroundingKeyPoses->points) {
+            kdtreeSurroundingKeyPoses->nearestKSearch(pt, 1, pointSearchInd, pointSearchSqDis);
+            extractInd.push_back(pointSearchInd[0]);
+        }
+
+        // also extract some latest key frames in case the robot rotates in one position
         int numPoses = cloudKeyPoses3D->size();
         for (int i = numPoses - 1; i >= 0; --i) {
-            if ((int)cloudToExtract->size() <= surroundingKeyframeSize)
-                cloudToExtract->push_back(cloudKeyPoses3D->points[i]);
+            if (timeLaserInfoCur - cloudKeyPoses6D->points[i].time < 10.0)
+                extractInd.push_back(cloudKeyPoses3D->points[i].intensity);
             else
                 break;
         }
 
-        extractCloud(cloudToExtract);
+        extractCloud(extractInd);
     }
 
-    void extractNearby() {
-        pcl::PointCloud<PointType>::Ptr surroundingKeyPoses(new pcl::PointCloud<PointType>());
-        pcl::PointCloud<PointType>::Ptr surroundingKeyPosesDS(new pcl::PointCloud<PointType>());
-        std::vector<int> pointSearchInd;
-        std::vector<float> pointSearchSqDis;
-
-        // extract all the nearby key poses and downsample them
-        if (LocEnableFlag) {
-            kdtreeSurroundingKeyPoses->radiusSearch(lastPoses3D, (double)surroundingKeyframeSearchRadius, pointSearchInd, pointSearchSqDis);
-            if (pointSearchInd.size() > surroundingKeyframeSearchMaxNum) pointSearchInd.resize(surroundingKeyframeSearchMaxNum);  // 大于Num进行截断
-        } else {
-            kdtreeSurroundingKeyPoses->setInputCloud(cloudKeyPoses3D);  // create kd-tree
-            kdtreeSurroundingKeyPoses->radiusSearch(cloudKeyPoses3D->back(), (double)surroundingKeyframeSearchRadius, pointSearchInd, pointSearchSqDis);
-        }
-
-        for (int i = 0; i < (int)pointSearchInd.size(); ++i) {
-            int id = pointSearchInd[i];
-            surroundingKeyPoses->push_back(cloudKeyPoses3D->points[id]);
-        }
-
-        downSizeFilterSurroundingKeyPoses.setInputCloud(surroundingKeyPoses);
-        downSizeFilterSurroundingKeyPoses.filter(*surroundingKeyPosesDS);
-        for (auto& pt : surroundingKeyPosesDS->points) {
-            kdtreeSurroundingKeyPoses->nearestKSearch(pt, 1, pointSearchInd, pointSearchSqDis);
-            pt.intensity = cloudKeyPoses3D->points[pointSearchInd[0]].intensity;
-        }
-
-        // 定位模式不再提取
-        if (LocEnableFlag == false) {
-            // also extract some latest key frames in case the robot rotates in one position
-            int numPoses = cloudKeyPoses3D->size();
-            for (int i = numPoses - 1; i >= 0; --i) {
-                if (timeLaserInfoCur - cloudKeyPoses6D->points[i].time < 10.0)
-                    surroundingKeyPosesDS->push_back(cloudKeyPoses3D->points[i]);
-                else
-                    break;
-            }
-        }
-
-        extractCloud(surroundingKeyPosesDS);
-    }
-
-    void extractCloud(pcl::PointCloud<PointType>::Ptr cloudToExtract) {
+    void extractCloud(std::vector<int> cloudToExtract) {
         // fuse the map
         laserCloudCornerFromMap->clear();
         laserCloudSurfFromMap->clear();
-        for (int i = 0; i < (int)cloudToExtract->size(); ++i) {
-            PointType lastPT;
-            if (LocEnableFlag)
-                lastPT = lastPoses3D;
-            else
-                lastPT = cloudKeyPoses3D->back();
-            if (pointDistance(cloudToExtract->points[i], lastPT) > surroundingKeyframeSearchRadius) continue;
-
-            int thisKeyInd = (int)cloudToExtract->points[i].intensity;
+        for (auto& thisKeyInd : cloudToExtract) {
             if (laserCloudMapContainer.find(thisKeyInd) != laserCloudMapContainer.end()) {
                 // transformed cloud available
                 *laserCloudCornerFromMap += laserCloudMapContainer[thisKeyInd].first;
