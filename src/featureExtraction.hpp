@@ -1,5 +1,4 @@
 #include "utility.hpp"
-#include "lio_sam/msg/cloud_info.hpp"
 
 struct smoothness_t {
     float value;
@@ -12,9 +11,6 @@ struct by_value {
 
 class FeatureExtraction : public ParamServer {
 public:
-    // rclcpp::Subscription<lio_sam::msg::CloudInfo>::SharedPtr subLaserCloudInfo;
-
-    // rclcpp::Publisher<lio_sam::msg::CloudInfo>::SharedPtr pubLaserCloudInfo;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubCornerPoints;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubSurfacePoints;
 
@@ -24,7 +20,7 @@ public:
 
     pcl::VoxelGrid<PointType> downSizeFilter;
 
-    lio_sam::msg::CloudInfo cloudInfo;
+    CloudInfo cloudInfo;
     std_msgs::msg::Header cloudHeader;
 
     std::vector<smoothness_t> cloudSmoothness;
@@ -33,10 +29,6 @@ public:
     int *cloudLabel;
 
     FeatureExtraction() : ParamServer() {
-        // subLaserCloudInfo = create_subscription<lio_sam::msg::CloudInfo>("lio_sam/deskew/cloud_info", qos,
-        //                                                                  std::bind(&FeatureExtraction::FeatureExtractionHandler, this,
-        //                                                                  std::placeholders::_1));
-        // pubLaserCloudInfo = create_publisher<lio_sam::msg::CloudInfo>("lio_sam/feature/cloud_info", qos);
         pubCornerPoints = create_publisher<sensor_msgs::msg::PointCloud2>("lio_sam/feature/cloud_corner", 1);
         pubSurfacePoints = create_publisher<sensor_msgs::msg::PointCloud2>("lio_sam/feature/cloud_surface", 1);
 
@@ -57,11 +49,12 @@ public:
         cloudLabel = new int[N_SCAN * Horizon_SCAN];
     }
 
-    void FeatureExtractionHandler(lio_sam::msg::CloudInfo &msgIn) {
+    void FeatureExtractionHandler(CloudInfo &msgIn) {
         // cloudInfo = std::move(msgIn);                                // new cloud info
         cloudInfo = msgIn;
-        cloudHeader = cloudInfo.header;                              // new cloud header
-        pcl::fromROSMsg(cloudInfo.cloud_deskewed, *extractedCloud);  // new cloud for extraction
+        cloudHeader = cloudInfo.header;  // new cloud header
+        extractedCloud = cloudInfo.cloud_deskewed;
+        // pcl::fromROSMsg(cloudInfo.cloud_deskewed, *extractedCloud);  // new cloud for extraction
 
         calculateSmoothness();
 
@@ -220,27 +213,13 @@ public:
         // free cloud info memory
         freeCloudInfoMemory();
         // save newly extracted features
-        cloudInfo.cloud_corner = publishCloud(pubCornerPoints, cornerCloud, cloudHeader.stamp, lidarFrame);
-        cloudInfo.cloud_surface = publishCloud(pubSurfacePoints, surfaceCloud, cloudHeader.stamp, lidarFrame);
+        *cloudInfo.cloud_corner = std::move(*cornerCloud);
+        *cloudInfo.cloud_surface = std::move(*surfaceCloud);
+        if (useRviz) {
+            publishCloud(pubCornerPoints, cornerCloud, cloudHeader.stamp, lidarFrame);
+            publishCloud(pubSurfacePoints, surfaceCloud, cloudHeader.stamp, lidarFrame);
+        }
         // publish to mapOptimization
         // pubLaserCloudInfo->publish(cloudInfo);
     }
 };
-
-// int main(int argc, char **argv) {
-//     rclcpp::init(argc, argv);
-//     rclcpp::NodeOptions options;
-//     options.use_intra_process_comms(true);
-//     rclcpp::executors::SingleThreadedExecutor exec;
-
-//     auto FE = std::make_shared<FeatureExtraction>(options);
-
-//     exec.add_node(FE);
-
-//     RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "\033[1;32m----> Feature Extraction Started.\033[0m");
-
-//     exec.spin();
-
-//     rclcpp::shutdown();
-//     return 0;
-// }

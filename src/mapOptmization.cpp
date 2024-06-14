@@ -1,9 +1,6 @@
 #include "utility.hpp"
 #include "file_tools.hpp"
 
-#include "lio_sam/msg/cloud_info.hpp"
-#include "lio_sam/srv/save_map.hpp"
-
 #include <gtsam/geometry/Rot3.h>
 #include <gtsam/geometry/Pose3.h>
 #include <gtsam/slam/PriorFactor.h>
@@ -78,13 +75,13 @@ public:
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubCloudRegisteredRaw;
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pubLoopConstraintEdge;
 
-    rclcpp::Service<lio_sam::srv::SaveMap>::SharedPtr srvSaveMap;
+    // rclcpp::Service<lio_sam::srv::SaveMap>::SharedPtr srvSaveMap;
     rclcpp::Subscription<livox_ros_driver2::msg::CustomMsg>::SharedPtr subCloud;
     rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr subGPS;
     rclcpp::Subscription<std_msgs::msg::Float64MultiArray>::SharedPtr subLoop;
 
     std::deque<nav_msgs::msg::Odometry> gpsQueue;
-    lio_sam::msg::CloudInfo cloudInfo;
+    CloudInfo cloudInfo;
 
     vector<pcl::PointCloud<PointType>::Ptr> cornerCloudKeyFrames;
     vector<pcl::PointCloud<PointType>::Ptr> surfCloudKeyFrames;
@@ -331,16 +328,19 @@ public:
 
         featureExtraction.FeatureExtractionHandler(imageProjection.cloudInfo);
 
-        cloudInfo = std::move(featureExtraction.cloudInfo);
+        cloudInfo = featureExtraction.cloudInfo;
 
         // extract time stamp
         timeLaserInfoStamp = cloudInfo.header.stamp;
         timeLaserInfoCur = stamp2Sec(cloudInfo.header.stamp);
 
         // extract info and feature cloud
-        pcl::fromROSMsg(cloudInfo.cloud_corner, *laserCloudCornerLast);
-        pcl::fromROSMsg(cloudInfo.cloud_surface, *laserCloudSurfLast);
-        pcl::fromROSMsg(cloudInfo.cloud_deskewed, *laserCloudRaw);
+        // pcl::fromROSMsg(cloudInfo.cloud_corner, *laserCloudCornerLast);
+        // pcl::fromROSMsg(cloudInfo.cloud_surface, *laserCloudSurfLast);
+        // pcl::fromROSMsg(cloudInfo.cloud_deskewed, *laserCloudRaw);
+        laserCloudCornerLast = cloudInfo.cloud_corner;
+        laserCloudSurfLast = cloudInfo.cloud_surface;
+        laserCloudRaw = cloudInfo.cloud_deskewed;
 
         std::lock_guard<std::mutex> lock(mtx);
 

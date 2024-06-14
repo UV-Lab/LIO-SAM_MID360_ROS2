@@ -12,6 +12,7 @@
 #include <nav_msgs/msg/odometry.hpp>
 #include <nav_msgs/msg/path.hpp>
 
+#define PCL_NO_PRECOMPILE  // pcl include kdtree_flann throws error if PCL_NO_PRECOMPILE
 #include <pcl/kdtree/kdtree_flann.h>
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
@@ -49,9 +50,34 @@ enum class SensorType { VELODYNE, OUSTER, LIVOX };
 #define GET_TIME() std::chrono::high_resolution_clock::now()
 #define GET_USED(t2, t1) std::chrono::duration<double>(t2 - t1).count()
 
+struct CloudInfo {
+    std_msgs::msg::Header header;
+
+    std::vector<int32_t> start_ring_index, end_ring_index;
+
+    std::vector<int32_t> point_col_ind;  // point column index in range image
+    std::vector<float> point_range;      // point range
+
+    int64_t imu_available, odom_available;
+
+    // Attitude for LOAM initialization
+    float imu_roll_init, imu_pitch_init, imu_yaw_init;
+
+    // Initial guess from imu pre-integration
+    float initial_guess_x, initial_guess_y, initial_guess_z;
+    float initial_guess_roll, initial_guess_pitch, initial_guess_yaw;
+
+    // Point cloud messages
+    pcl::PointCloud<PointType>::Ptr cloud_deskewed{new pcl::PointCloud<PointType>};  // original cloud deskewed
+    pcl::PointCloud<PointType>::Ptr cloud_corner{new pcl::PointCloud<PointType>};    // extracted corner feature
+    pcl::PointCloud<PointType>::Ptr cloud_surface{new pcl::PointCloud<PointType>};   // extracted surface feature
+};
+
 class ParamServer : public rclcpp::Node {
 public:
     std::string robot_id;
+
+    bool useRviz;
 
     // Topics
     string pointCloudTopic, imuTopic;
@@ -119,7 +145,10 @@ public:
     float globalMapVisualizationPoseDensity;
     float globalMapVisualizationLeafSize;
 
+    // FIXME:存在多个类公用一个Node的问题
     ParamServer() : Node("ParamServerNode") {
+        declare_and_get_parameter<bool>("useRviz", useRviz, true);
+
         declare_and_get_parameter<std::string>("pointCloudTopic", pointCloudTopic, "points");
         declare_and_get_parameter<std::string>("imuTopic", imuTopic, "imu/data");
         declare_and_get_parameter<std::string>("odomTopic", odomTopic, "lio_sam/odometry/imu");
@@ -167,14 +196,9 @@ public:
 
         double ida[] = {1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0};
         std::vector<double> id(ida, std::end(ida));
-        declare_parameter("extrinsicRot", id);
-        get_parameter("extrinsicRot", extRotV);
-        declare_parameter("extrinsicRPY", id);
-        get_parameter("extrinsicRPY", extRPYV);
-        double zea[] = {0.0, 0.0, 0.0};
-        std::vector<double> ze(zea, std::end(zea));
-        declare_parameter("extrinsicTrans", ze);
-        get_parameter("extrinsicTrans", extTransV);
+        declare_and_get_parameter<std::vector<double>>("extrinsicRot", extRotV, id);
+        declare_and_get_parameter<std::vector<double>>("extrinsicRPY", extRPYV, id);
+        declare_and_get_parameter<std::vector<double>>("extrinsicTrans", extTransV, {0.0, 0.0, 0.0});
 
         extRot = Eigen::Map<const Eigen::Matrix<double, -1, -1, Eigen::RowMajor>>(extRotV.data(), 3, 3);
         extRPY = Eigen::Map<const Eigen::Matrix<double, -1, -1, Eigen::RowMajor>>(extRPYV.data(), 3, 3);
