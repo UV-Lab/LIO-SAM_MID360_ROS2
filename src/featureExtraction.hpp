@@ -11,12 +11,9 @@ struct by_value {
 
 class FeatureExtraction : public ParamServer {
 public:
-    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubCornerPoints;
-    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubSurfacePoints;
-
-    pcl::PointCloud<PointType>::Ptr extractedCloud;
-    pcl::PointCloud<PointType>::Ptr cornerCloud;
-    pcl::PointCloud<PointType>::Ptr surfaceCloud;
+    pcl::PointCloud<PointType>::Ptr extractedCloud{new pcl::PointCloud<PointType>};
+    pcl::PointCloud<PointType>::Ptr cornerCloud{new pcl::PointCloud<PointType>};
+    pcl::PointCloud<PointType>::Ptr surfaceCloud{new pcl::PointCloud<PointType>};
 
     pcl::VoxelGrid<PointType> downSizeFilter;
 
@@ -28,21 +25,11 @@ public:
     int *cloudNeighborPicked;
     int *cloudLabel;
 
-    FeatureExtraction() : ParamServer() {
-        pubCornerPoints = create_publisher<sensor_msgs::msg::PointCloud2>("lio_sam/feature/cloud_corner", 1);
-        pubSurfacePoints = create_publisher<sensor_msgs::msg::PointCloud2>("lio_sam/feature/cloud_surface", 1);
-
-        initializationValue();
-    }
+    FeatureExtraction() : ParamServer("FeatureExtractionParamServer") { initializationValue(); }
 
     void initializationValue() {
         cloudSmoothness.resize(N_SCAN * Horizon_SCAN);
-
         downSizeFilter.setLeafSize(odometrySurfLeafSize, odometrySurfLeafSize, odometrySurfLeafSize);
-
-        extractedCloud.reset(new pcl::PointCloud<PointType>());
-        cornerCloud.reset(new pcl::PointCloud<PointType>());
-        surfaceCloud.reset(new pcl::PointCloud<PointType>());
 
         cloudCurvature = new float[N_SCAN * Horizon_SCAN];
         cloudNeighborPicked = new int[N_SCAN * Horizon_SCAN];
@@ -215,10 +202,6 @@ public:
         // save newly extracted features
         *cloudInfo.cloud_corner = std::move(*cornerCloud);
         *cloudInfo.cloud_surface = std::move(*surfaceCloud);
-        if (useRviz) {
-            publishCloud(pubCornerPoints, cornerCloud, cloudHeader.stamp, lidarFrame);
-            publishCloud(pubSurfacePoints, surfaceCloud, cloudHeader.stamp, lidarFrame);
-        }
         // publish to mapOptimization
         // pubLaserCloudInfo->publish(cloudInfo);
     }

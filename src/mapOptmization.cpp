@@ -159,6 +159,9 @@ public:
 
     rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr subImu;
     rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr subOdom;
+    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubExtractedCloud;
+    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubCornerPoints;
+    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubSurfacePoints;
 
     /////////////////////////////////// SC Start ///////////////////////////////////
     SCManager scManager;
@@ -166,7 +169,7 @@ public:
     pcl::PointCloud<PointType>::Ptr laserCloudRawDS{new pcl::PointCloud<PointType>()};  // giseop
     /////////////////////////////////// SC End ///////////////////////////////////
 
-    mapOptimization(const rclcpp::NodeOptions& options) : ParamServer() {
+    mapOptimization(const rclcpp::NodeOptions& options) : ParamServer("mapOptimizationParamServer") {
         ISAM2Params parameters;
         parameters.relinearizeThreshold = 0.1;
         parameters.relinearizeSkip = 1;
@@ -198,6 +201,10 @@ public:
         pubRecentKeyFrames = create_publisher<sensor_msgs::msg::PointCloud2>("lio_sam/mapping/map_local", 1);
         pubRecentKeyFrame = create_publisher<sensor_msgs::msg::PointCloud2>("lio_sam/mapping/cloud_registered", 1);
         pubCloudRegisteredRaw = create_publisher<sensor_msgs::msg::PointCloud2>("lio_sam/mapping/cloud_registered_raw", 1);
+
+        pubExtractedCloud = create_publisher<sensor_msgs::msg::PointCloud2>("lio_sam/deskew/cloud_deskewed", 1);
+        pubCornerPoints = create_publisher<sensor_msgs::msg::PointCloud2>("lio_sam/feature/cloud_corner", 1);
+        pubSurfacePoints = create_publisher<sensor_msgs::msg::PointCloud2>("lio_sam/feature/cloud_surface", 1);
 
         downSizeFilterCorner.setLeafSize(mappingCornerLeafSize, mappingCornerLeafSize, mappingCornerLeafSize);
         downSizeFilterSurf.setLeafSize(mappingSurfLeafSize, mappingSurfLeafSize, mappingSurfLeafSize);
@@ -375,6 +382,12 @@ public:
             publishOdometry();
 
             publishFrames();
+
+            if (useRviz) {
+                publishCloud(pubExtractedCloud, cloudInfo.cloud_deskewed, cloudInfo.header.stamp, lidarFrame);
+                publishCloud(pubCornerPoints, cloudInfo.cloud_corner, cloudInfo.header.stamp, lidarFrame);
+                publishCloud(pubSurfacePoints, cloudInfo.cloud_surface, cloudInfo.header.stamp, lidarFrame);
+            }
 
             auto t5 = GET_TIME();
 

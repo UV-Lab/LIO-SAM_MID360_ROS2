@@ -145,8 +145,7 @@ public:
     float globalMapVisualizationPoseDensity;
     float globalMapVisualizationLeafSize;
 
-    // FIXME:存在多个类公用一个Node的问题
-    ParamServer() : Node("ParamServerNode") {
+    ParamServer(std::string node_name) : Node(node_name) {
         declare_and_get_parameter<bool>("useRviz", useRviz, true);
 
         declare_and_get_parameter<std::string>("pointCloudTopic", pointCloudTopic, "points");

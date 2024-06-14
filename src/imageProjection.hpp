@@ -71,10 +71,7 @@ void imuRPY2rosRPY(sensor_msgs::msg::Imu *thisImuMsg, T *rosRoll, T *rosPitch, T
 
 class ImageProjection : public ParamServer {
 private:
-    std::mutex imuLock;
-    std::mutex odoLock;
-
-    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubExtractedCloud;
+    std::mutex imuLock, odoLock;
 
     std::deque<sensor_msgs::msg::Imu> imuQueue;
     std::deque<nav_msgs::msg::Odometry> odomQueue;
@@ -92,19 +89,15 @@ private:
 
     pcl::PointCloud<PointXYZIRT>::Ptr laserCloudIn;
     pcl::PointCloud<OusterPointXYZIRT>::Ptr tmpOusterCloudIn;
-    pcl::PointCloud<PointType>::Ptr fullCloud;
-    pcl::PointCloud<PointType>::Ptr extractedCloud;
+    pcl::PointCloud<PointType>::Ptr fullCloud, extractedCloud;
 
-    int deskewFlag;
+    int deskewFlag = 0;
     cv::Mat rangeMat;
 
     bool odomDeskewFlag;
-    float odomIncreX;
-    float odomIncreY;
-    float odomIncreZ;
+    float odomIncreX, odomIncreY, odomIncreZ;
 
-    double timeScanCur;
-    double timeScanEnd;
+    double timeScanCur, timeScanEnd;
     std_msgs::msg::Header cloudHeader;
 
     vector<int> columnIdnCountVec;
@@ -112,9 +105,7 @@ private:
 public:
     CloudInfo cloudInfo;
 
-    ImageProjection() : ParamServer(), deskewFlag(0) {
-        pubExtractedCloud = create_publisher<sensor_msgs::msg::PointCloud2>("lio_sam/deskew/cloud_deskewed", 1);
-
+    ImageProjection() : ParamServer("ImageProjectionParamServer") {
         allocateMemory();
         resetParameters();
 
@@ -570,6 +561,5 @@ public:
     void publishClouds() {
         cloudInfo.header = cloudHeader;
         *cloudInfo.cloud_deskewed = std::move(*extractedCloud);
-        if (useRviz) publishCloud(pubExtractedCloud, extractedCloud, cloudHeader.stamp, lidarFrame);
     }
 };
