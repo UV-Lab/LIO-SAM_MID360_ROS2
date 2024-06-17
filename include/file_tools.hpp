@@ -25,6 +25,60 @@ inline std::string padZeros(int val, int num_digits = 6) {
     return out.str();
 }
 
+// zxl(已完成)
+inline void loadSCD(std::string fileName, Eigen::MatrixXd& matrix, char delimiter = ' ') {
+    // delimiter: ", " or " " etc.
+    std::vector<double> matrixEntries;
+    std::ifstream matrixDataFile(fileName);
+    if (!matrixDataFile.is_open()) {
+        std::cout << "读入SCD文件失败!!" << std::endl;
+        return;
+    }
+
+    std::string matrixRowString;
+    std::string matrixEntry;
+    int matrixRowNumber = 0;
+    while (getline(matrixDataFile, matrixRowString)) {
+        std::stringstream matrixRowStringStream(matrixRowString);
+
+        while (getline(matrixRowStringStream, matrixEntry, delimiter)) {
+            matrixEntries.push_back(stod(matrixEntry));
+        }
+        matrixRowNumber++;
+    }
+
+    matrix = Eigen::Map<Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>(matrixEntries.data(), matrixRowNumber,
+                                                                                                matrixEntries.size() / matrixRowNumber);
+    matrixDataFile.close();
+}
+
+// zxl(已完成)
+inline void loadPoses(std::string fileName, Eigen::MatrixXd& matrixPose, char delimiter = ' ') {
+    // delimiter: ", " or " " etc.
+    std::vector<double> matrixEntries;
+    std::ifstream matrixDataFile(fileName);
+    if (!matrixDataFile.is_open()) {
+        std::cout << "读入SCD文件失败!!" << std::endl;
+        return;
+    }
+
+    std::string matrixRowString;
+    std::string matrixEntry;
+    int matrixRowNumber = 0;
+    while (getline(matrixDataFile, matrixRowString)) {
+        std::stringstream matrixRowStringStream(matrixRowString);
+
+        while (getline(matrixRowStringStream, matrixEntry, delimiter)) {
+            matrixEntries.push_back(stod(matrixEntry));
+        }
+        matrixRowNumber++;
+    }
+
+    matrixPose = Eigen::Map<Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>(matrixEntries.data(), matrixRowNumber,
+                                                                                                    matrixEntries.size() / matrixRowNumber);
+    matrixDataFile.close();
+}
+
 /////////////////////////////////// File-Tools ///////////////////////////////////
 #include <sys/stat.h>  // mkdir, stat
 

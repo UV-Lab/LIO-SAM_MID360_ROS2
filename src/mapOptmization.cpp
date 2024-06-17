@@ -277,6 +277,7 @@ public:
     PointTypePose lastPoses6D;
     int surroundingKeyframeSearchMaxNum = 10;
 
+    pcl::PointCloud<PointType>::Ptr idxMap{new pcl::PointCloud<PointType>};
     enum InitializedFlag { NonInitialized, Initializing, Initialized, MayLost };
     InitializedFlag LocInitSta = InitializedFlag::NonInitialized;
 
@@ -303,8 +304,10 @@ public:
         pcl::io::loadPCDFile<PointType>(loadPCDDirectory + "/trajectory.pcd", *cloudKeyPoses3D);
         kdtreeSurroundingKeyPoses->setInputCloud(cloudKeyPoses3D);
 
-        std::cout << "loading map [ " << cloudKeyPoses6D->size() << " ] from " << loadPCDDirectory << std::endl;
-        for (int i = 0; i < cloudKeyPoses6D->size(); i++) {
+        int count = cloudKeyPoses6D->size();
+
+        std::cout << "loading map [ " << count << " ] from " << loadPCDDirectory << std::endl;
+        for (int i = 0; i < count; i++) {
             CloudPtr cornerKeyFrame(new CloudType());
             CloudPtr surfKeyFrame(new CloudType());
             pcl::io::loadPCDFile<PointType>(loadPCDDirectory + "/CornerMap/" + std::to_string(i) + ".pcd", *cornerKeyFrame);
@@ -312,7 +315,26 @@ public:
             cornerCloudKeyFrames.push_back(cornerKeyFrame);
             surfCloudKeyFrames.push_back(surfKeyFrame);
         }
-        printf("************************Keyframe map loaded************************");
+        std::cout << "************************Keyframe map loaded************************" << std::endl;
+
+        pcl::io::loadPCDFile<PointType>(loadPCDDirectory + "/idxMap.pcd", *idxMap);
+        for (int i = 0; i < idxMap->size(); ++i) {
+            std::string scd_path = loadPCDDirectory + "/SCDs/" + padZeros(i) + ".scd";
+            Eigen::MatrixXd load_sc;
+            loadSCD(scd_path, load_sc);
+
+            // load keys
+            Eigen::MatrixXd ringkey = scManager.makeRingkeyFromScancontext(load_sc);
+            Eigen::MatrixXd sectorkey = scManager.makeSectorkeyFromScancontext(load_sc);
+            std::vector<float> polarcontext_invkey_vec = eig2stdvec(ringkey);
+
+            scManager.polarcontexts_.push_back(load_sc);
+            scManager.polarcontext_invkeys_.push_back(ringkey);
+            scManager.polarcontext_vkeys_.push_back(sectorkey);
+            scManager.polarcontext_invkeys_mat_.push_back(polarcontext_invkey_vec);
+        }
+
+        std::cout << "************************sc loaded************************" << std::endl;
     }
 
     void saveKeyFramesAndLoc() {
@@ -324,6 +346,96 @@ public:
         lastPoses6D.time = timeLaserInfoCur;
 
         updatePath(lastPoses6D);
+    }
+
+    void SCReLoc() {
+        std::cerr << "[ReLoc] SC Initializing" << std::endl;
+
+        *copy_cloudKeyPoses3D = *cloudKeyPoses3D;
+        *copy_cloudKeyPoses6D = *cloudKeyPoses6D;
+
+        // 使用当前扫描去查询
+        downSizeFilterSurf.setInputCloud(laserCloudRaw);
+        downSizeFilterSurf.filter(*laserCloudRawDS);
+
+        // find keys
+        auto detectResult = scManager.detectLoopClosureID(*laserCloudRawDS);  // first: nn index, second: yaw diff 这个函数引起的崩溃，要排查
+        int loopKeyPre = detectResult.first;
+        float yawDiffRad = detectResult.second;  // not use for v1 (because pcl icp withi initial somthing wrong...)
+        if (loopKeyPre == -1) {
+            std::cerr << "[ReLoc] SC no found" << std::endl;
+            return;
+        }
+
+        loopKeyPre = idxMap->points[loopKeyPre].intensity;
+        std::cout << "[ReLoc] SC loop found: " << detectResult.first << " map to " << loopKeyPre << std::endl;
+
+        // extract cloud
+        pcl::PointCloud<PointType>::Ptr cureKeyframeCloud = laserCloudRawDS;
+        pcl::PointCloud<PointType>::Ptr prevKeyframeCloud(new pcl::PointCloud<PointType>());
+
+        int base_key = 0;
+        // 实际上是将相邻histNum叠加在一起去配准，
+        // loopFindNearKeyframesWithRespectTo(cureKeyframeCloud, loopKeyCur, 0, base_key);                         // giseop
+        loopFindNearKeyframesWithRespectTo(prevKeyframeCloud, loopKeyPre, historyKeyframeSearchNum, base_key);  // giseop
+        // 如果不叠加，getFitnessScore分数很高，根本上不去
+        // loopFindNearKeyframes(cureKeyframeCloud, loopKeyCur, 2);                         // giseop
+        // loopFindNearKeyframes(prevKeyframeCloud, loopKeyPre, historyKeyframeSearchNum);  // giseop
+        if (pubHistoryKeyFrames->get_subscription_count() != 0) publishCloud(pubHistoryKeyFrames, prevKeyframeCloud, timeLaserInfoStamp, odometryFrame);
+
+        // ICP Settings
+        pcl::IterativeClosestPoint<PointType, PointType> icp;
+        icp.setMaxCorrespondenceDistance(150);  // giseop , use a value can cover 2*historyKeyframeSearchNum range in meter
+        icp.setMaximumIterations(100);
+        icp.setTransformationEpsilon(1e-6);
+        icp.setEuclideanFitnessEpsilon(1e-6);
+        icp.setRANSACIterations(0);
+
+        // Align clouds
+        icp.setInputSource(cureKeyframeCloud);
+        icp.setInputTarget(prevKeyframeCloud);
+        pcl::PointCloud<PointType>::Ptr unused_result(new pcl::PointCloud<PointType>());
+        icp.align(*unused_result);
+        // giseop
+        // TODO icp align with initial
+        if (icp.hasConverged() == false || icp.getFitnessScore() > historyKeyframeFitnessScore) {
+            std::cout << "[ReLoc] ICP fitness test failed (" << icp.getFitnessScore() << " > " << historyKeyframeFitnessScore << "). Reject this SC loop."
+                      << std::endl;
+            return;
+        } else {
+            std::cout << "[ReLoc] ICP fitness test passed (" << icp.getFitnessScore() << " < " << historyKeyframeFitnessScore << "). Add this SC loop."
+                      << std::endl;
+        }
+
+        // publish corrected cloud
+        if (pubIcpKeyFrames->get_subscription_count() != 0) {
+            pcl::PointCloud<PointType>::Ptr closed_cloud(new pcl::PointCloud<PointType>());
+            pcl::transformPointCloud(*cureKeyframeCloud, *closed_cloud, icp.getFinalTransformation());
+            publishCloud(pubIcpKeyFrames, closed_cloud, timeLaserInfoStamp, odometryFrame);
+        }
+
+        // Get pose transformation
+        float x, y, z, roll, pitch, yaw;
+        Eigen::Affine3f correctionLidarFrame;
+        correctionLidarFrame = icp.getFinalTransformation();
+        Eigen::Affine3f loopKeyPreTransformInTheWorld = pclPointToAffine3f(cloudKeyPoses6D->points[loopKeyPre]);  // zxl
+        Eigen::Affine3f loopKeyCurTransformInTheWorld = loopKeyPreTransformInTheWorld * correctionLidarFrame;     // zxl
+
+        // zxl
+        pcl::getTranslationAndEulerAngles(loopKeyCurTransformInTheWorld, x, y, z, roll, pitch, yaw);
+        transformTobeMapped[0] = roll;
+        transformTobeMapped[1] = pitch;
+        transformTobeMapped[2] = yaw;
+        lastPoses3D.x = transformTobeMapped[3] = x;
+        lastPoses3D.y = transformTobeMapped[4] = y;
+        lastPoses3D.z = transformTobeMapped[5] = z;
+
+        lastPoses6D = trans2PointTypePose(transformTobeMapped);
+        lastPoses6D.time = timeLaserInfoCur;
+
+        std::cout << "[ReLoc is OK] the pose loop is: x" << x << " y" << y << " z" << z << std::endl;
+
+        LocInitSta = Initialized;
     }
 
     /////////////////////////////////// Loc End ///////////////////////////////////
@@ -356,6 +468,8 @@ public:
             auto t0 = GET_TIME();
 
             updateInitialGuess();
+
+            if (LocInitSta != Initialized) return;
 
             auto t1 = GET_TIME();
 
@@ -972,8 +1086,16 @@ public:
         incrementalOdometryAffineFront = trans2Affine3f(transformTobeMapped);
 
         static Eigen::Affine3f lastImuTransformation;
+
+        bool useSCReLoc = true;
+        // SC Reloc
+        if (LocEnableFlag && useSCReLoc && LocInitSta != InitializedFlag::Initialized) {
+            SCReLoc();
+            lastImuTransformation = pcl::getTransformation(0, 0, 0, cloudInfo.imu_roll_init, cloudInfo.imu_pitch_init, cloudInfo.imu_yaw_init);
+        }
+
         // initialization
-        if (cloudKeyPoses3D->points.empty() || (LocEnableFlag && LocInitSta == InitializedFlag::NonInitialized)) {
+        if (cloudKeyPoses3D->points.empty() || (LocEnableFlag && useSCReLoc == false && LocInitSta == InitializedFlag::NonInitialized)) {
             transformTobeMapped[0] = cloudInfo.imu_roll_init;
             transformTobeMapped[1] = cloudInfo.imu_pitch_init;
             transformTobeMapped[2] = cloudInfo.imu_yaw_init;
