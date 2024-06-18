@@ -277,6 +277,10 @@ public:
     PointTypePose lastPoses6D;
     int surroundingKeyframeSearchMaxNum = 10;
 
+    // ReLoc
+    bool subMapMode = true;
+    bool useSCReLoc = false;
+    std::vector<double> init_guess{6, 0};
     pcl::PointCloud<PointType>::Ptr idxMap{new pcl::PointCloud<PointType>};
     enum InitializedFlag { NonInitialized, Initializing, Initialized, MayLost };
     InitializedFlag LocInitSta = InitializedFlag::NonInitialized;
@@ -290,6 +294,8 @@ public:
     void InitLocationMode() {
         declare_and_get_parameter<bool>("Loc.EnableFlag", LocEnableFlag, false);
         if (LocEnableFlag) {
+            declare_and_get_parameter<bool>("Loc.useSCReLoc", useSCReLoc, false);
+            declare_and_get_parameter<vector<double>>("Loc.init_guess", init_guess, vector<double>());
             declare_and_get_parameter<string>("Loc.loadPCDDirectory", loadPCDDirectory, "");
             declare_and_get_parameter<float>("Loc.surroundingKeyframeSearchRadius", surroundingKeyframeSearchRadius, 20.0);
             declare_and_get_parameter<int>("Loc.surroundingKeyframeSearchMaxNum", surroundingKeyframeSearchMaxNum, 10);
@@ -317,7 +323,13 @@ public:
         }
         std::cout << "************************Keyframe map loaded************************" << std::endl;
 
-        pcl::io::loadPCDFile<PointType>(loadPCDDirectory + "/idxMap.pcd", *idxMap);
+        if (useSCReLoc == false) return;  // 提前结束
+
+        // 如果不存在idxMap，即非submap模式
+        if (pcl::io::loadPCDFile<PointType>(loadPCDDirectory + "/idxMap.pcd", *idxMap) == -1) {
+            pcl::io::loadPCDFile<PointType>(loadPCDDirectory + "/trajectory.pcd", *idxMap);
+            subMapMode = false;
+        }
         for (int i = 0; i < idxMap->size(); ++i) {
             std::string scd_path = loadPCDDirectory + "/SCDs/" + padZeros(i) + ".scd";
             Eigen::MatrixXd load_sc;
@@ -361,7 +373,7 @@ public:
         // find keys
         auto detectResult = scManager.detectLoopClosureID(*laserCloudRawDS);  // first: nn index, second: yaw diff 这个函数引起的崩溃，要排查
         int loopKeyPre = detectResult.first;
-        float yawDiffRad = detectResult.second;  // not use for v1 (because pcl icp withi initial somthing wrong...)
+        // float yawDiffRad = detectResult.second;  // not use for v1 (because pcl icp withi initial somthing wrong...)
         if (loopKeyPre == -1) {
             std::cerr << "[ReLoc] SC no found" << std::endl;
             return;
@@ -375,9 +387,9 @@ public:
         pcl::PointCloud<PointType>::Ptr prevKeyframeCloud(new pcl::PointCloud<PointType>());
 
         int base_key = 0;
-        // 实际上是将相邻histNum叠加在一起去配准，
-        // loopFindNearKeyframesWithRespectTo(cureKeyframeCloud, loopKeyCur, 0, base_key);                         // giseop
-        loopFindNearKeyframesWithRespectTo(prevKeyframeCloud, loopKeyPre, historyKeyframeSearchNum, base_key);  // giseop
+        // 实际上是将相邻histNum叠加在一起去配准
+        if (subMapMode) historyKeyframeSearchNum = 2;
+        loopFindNearKeyframesWithRespectTo(prevKeyframeCloud, loopKeyPre, historyKeyframeSearchNum, base_key);
         // 如果不叠加，getFitnessScore分数很高，根本上不去
         // loopFindNearKeyframes(cureKeyframeCloud, loopKeyCur, 2);                         // giseop
         // loopFindNearKeyframes(prevKeyframeCloud, loopKeyPre, historyKeyframeSearchNum);  // giseop
@@ -469,7 +481,7 @@ public:
 
             updateInitialGuess();
 
-            if (LocInitSta != Initialized) return;
+            if (LocEnableFlag && LocInitSta != Initialized) return;
 
             auto t1 = GET_TIME();
 
@@ -1087,32 +1099,38 @@ public:
 
         static Eigen::Affine3f lastImuTransformation;
 
-        bool useSCReLoc = true;
         // SC Reloc
-        if (LocEnableFlag && useSCReLoc && LocInitSta != InitializedFlag::Initialized) {
-            SCReLoc();
+        if (LocEnableFlag && LocInitSta != InitializedFlag::Initialized) {
+            if (useSCReLoc) {
+                SCReLoc();
+            } else {
+                // 使用初值
+                transformTobeMapped[0] = init_guess[0];
+                transformTobeMapped[1] = init_guess[1];
+                transformTobeMapped[2] = init_guess[2];
+                lastPoses3D.x = transformTobeMapped[3] = init_guess[3];
+                lastPoses3D.y = transformTobeMapped[4] = init_guess[4];
+                lastPoses3D.z = transformTobeMapped[5] = init_guess[5];
+
+                lastPoses6D = trans2PointTypePose(transformTobeMapped);
+                lastPoses6D.time = timeLaserInfoCur;
+
+                LocInitSta = InitializedFlag::Initialized;
+            }
+
             lastImuTransformation = pcl::getTransformation(0, 0, 0, cloudInfo.imu_roll_init, cloudInfo.imu_pitch_init, cloudInfo.imu_yaw_init);
+            return;
         }
 
         // initialization
-        if (cloudKeyPoses3D->points.empty() || (LocEnableFlag && useSCReLoc == false && LocInitSta == InitializedFlag::NonInitialized)) {
+        if (cloudKeyPoses3D->points.empty()) {
             transformTobeMapped[0] = cloudInfo.imu_roll_init;
             transformTobeMapped[1] = cloudInfo.imu_pitch_init;
             transformTobeMapped[2] = cloudInfo.imu_yaw_init;
 
             if (!useImuHeadingInitialization) transformTobeMapped[2] = 0;
 
-            lastImuTransformation =
-                pcl::getTransformation(0, 0, 0, cloudInfo.imu_roll_init, cloudInfo.imu_pitch_init, cloudInfo.imu_yaw_init);  // save imu before return;
-
-            if (LocEnableFlag) {
-                LocInitSta = InitializedFlag::Initialized;
-                // TODO:
-                lastPoses3D.x = transformTobeMapped[3], lastPoses3D.y = transformTobeMapped[4], lastPoses3D.z = transformTobeMapped[5];
-                lastPoses6D = trans2PointTypePose(transformTobeMapped);
-                lastPoses6D.time = timeLaserInfoCur;
-            }
-
+            lastImuTransformation = pcl::getTransformation(0, 0, 0, cloudInfo.imu_roll_init, cloudInfo.imu_pitch_init, cloudInfo.imu_yaw_init);
             return;
         }
 

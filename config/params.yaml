@@ -2,10 +2,16 @@
   ros__parameters:
 
     Loc:
-      EnableFlag: false
-      loadPCDDirectory: "/D:/RepoMy/save/t2/"
+      EnableFlag: true
+      loadPCDDirectory: "/D:/RepoMy/save/lt/pings/"  # msubmap
+      # surroundingKeyframeSearchRadius: 20.0 # 定位时使用的查找范围
+      # surroundingKeyframeSearchMaxNum: 10   # 最大取多少个最近帧进行匹配 
       surroundingKeyframeSearchRadius: 20.0 # 定位时使用的查找范围
-      surroundingKeyframeSearchMaxNum: 20   # 最大取多少个最近帧进行匹配 
+      surroundingKeyframeSearchMaxNum: 5   # 最大取多少个最近帧进行匹配 
+      useSCReLoc: false
+      # init_guess: [0.0, 0.0, 3.14, -7.48, -6.655, 0.] 
+      init_guess: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0] 
+    useRviz: true
 
 
     # Topics
@@ -28,7 +34,7 @@
 
     # Export settings
     savePCD: true                               # https://github.com/TixiaoShan/LIO-SAM/issues/3
-    savePCDDirectory: "/D:/RepoMy/save/lt/mliosam/"         # in your home folder, starts and ends with "/". Warning: the code deletes "LOAM" folder then recreates it. See "mapOptimization" for implementation
+    savePCDDirectory: "/D:/RepoMy/save/lt/temp/"         # in your home folder, starts and ends with "/". Warning: the code deletes "LOAM" folder then recreates it. See "mapOptimization" for implementation
 
     # Sensor Settings
     sensor: livox                               # lidar sensor type, either 'velodyne', 'ouster' or 'livox'

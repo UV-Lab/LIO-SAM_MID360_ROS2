@@ -18,6 +18,8 @@
 
 - 1.7 - 6.17 - 加入SC ReLoc
 
+- 1.8 - 6.18 - fix scloc bug, add init_guess
+
 
 ## Tips
 
