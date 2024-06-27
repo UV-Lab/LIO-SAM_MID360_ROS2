@@ -519,7 +519,7 @@ public:
             auto t5 = GET_TIME();
 
             printf("ext: %.2f icp: %.2f all: %.2f ", GET_USED(t3, t1) * 1000, GET_USED(t4, t3) * 1000, GET_USED(t5, t0) * 1000);
-            printf("| ds: %d + %d map: %d + %d", laserCloudSurfLastDSNum, laserCloudCornerLastDSNum, laserCloudSurfFromMapDSNum, laserCloudCornerLastDSNum);
+            printf("| ds: %d + %d map: %d + %d", laserCloudSurfLastDSNum, laserCloudCornerLastDSNum, laserCloudSurfFromMapDSNum, laserCloudCornerFromMapDSNum);
             std::cout << std::endl;
         }
     }
@@ -1429,6 +1429,8 @@ public:
         }
     }
 
+#define NUM_MATCH_POINTS 5
+
     void surfOptimization() {
         updatePointAssociateToMap();
 
@@ -1440,18 +1442,18 @@ public:
 
             pointOri = laserCloudSurfLastDS->points[i];
             pointAssociateToMap(&pointOri, &pointSel);
-            kdtreeSurfFromMap->nearestKSearch(pointSel, 5, pointSearchInd, pointSearchSqDis);
+            kdtreeSurfFromMap->nearestKSearch(pointSel, NUM_MATCH_POINTS, pointSearchInd, pointSearchSqDis);
 
-            Eigen::Matrix<float, 5, 3> matA0;
-            Eigen::Matrix<float, 5, 1> matB0;
+            Eigen::Matrix<float, NUM_MATCH_POINTS, 3> matA0;
+            Eigen::Matrix<float, NUM_MATCH_POINTS, 1> matB0;
             Eigen::Vector3f matX0;
 
             matA0.setZero();
             matB0.fill(-1);
             matX0.setZero();
 
-            if (pointSearchSqDis[4] < 1.0) {
-                for (int j = 0; j < 5; j++) {
+            if (pointSearchSqDis[NUM_MATCH_POINTS - 1] < 1.0) {
+                for (int j = 0; j < NUM_MATCH_POINTS; j++) {
                     matA0(j, 0) = laserCloudSurfFromMapDS->points[pointSearchInd[j]].x;
                     matA0(j, 1) = laserCloudSurfFromMapDS->points[pointSearchInd[j]].y;
                     matA0(j, 2) = laserCloudSurfFromMapDS->points[pointSearchInd[j]].z;
@@ -1471,7 +1473,7 @@ public:
                 pd /= ps;
 
                 bool planeValid = true;
-                for (int j = 0; j < 5; j++) {
+                for (int j = 0; j < NUM_MATCH_POINTS; j++) {
                     if (fabs(pa * laserCloudSurfFromMapDS->points[pointSearchInd[j]].x + pb * laserCloudSurfFromMapDS->points[pointSearchInd[j]].y +
                              pc * laserCloudSurfFromMapDS->points[pointSearchInd[j]].z + pd) > 0.2) {
                         planeValid = false;
@@ -1699,6 +1701,7 @@ public:
     bool saveFrame() {
         if (cloudKeyPoses3D->points.empty()) return true;
 
+        // TODO:
         if (sensor == SensorType::LIVOX) {
             if (timeLaserInfoCur - cloudKeyPoses6D->back().time > 1.0) return true;
         }
