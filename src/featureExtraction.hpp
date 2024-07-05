@@ -119,14 +119,18 @@ public:
         for (int i = 0; i < N_SCAN; i++) {
             surfaceCloudScan->clear();
 
+            // 将一条扫描线扫描一周的点云数据，划分为6段，每段分开提取有限数量的特征，保证特征均匀分布
             for (int j = 0; j < 6; j++) {
+                // 每段点云的起始、结束索引；startRingIndex为扫描线起始第5个激光点在一维数组中的索引
                 int sp = (cloudInfo.start_ring_index[i] * (6 - j) + cloudInfo.end_ring_index[i] * j) / 6;
                 int ep = (cloudInfo.start_ring_index[i] * (5 - j) + cloudInfo.end_ring_index[i] * (j + 1)) / 6 - 1;
 
                 if (sp >= ep) continue;
 
+                // 按照曲率从小到大排序点云
                 std::sort(cloudSmoothness.begin() + sp, cloudSmoothness.begin() + ep, by_value());
 
+                // 按照曲率从大到小遍历
                 int largestPickedNum = 0;
                 for (int k = ep; k >= sp; k--) {
                     int ind = cloudSmoothness[k].ind;

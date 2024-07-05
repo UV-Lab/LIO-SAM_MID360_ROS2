@@ -20,6 +20,8 @@
 
 - 1.8 - 6.18 - fix scloc bug, add init_guess
 
+- 1.9 - 7.5 - 修复 没有将kdtree加入cache 的 bug
+
 
 ## Tips
 

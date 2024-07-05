@@ -648,15 +648,16 @@ public:
             rate.sleep();
             if (LocEnableFlag == false) publishGlobalMap();  // 定位模式，不使用
         }
-        if (savePCD == false) return;
-        cout << "****************************************************" << endl;
-        cout << "Saving map to pcd files ..." << endl;
-
         const std::string kitti_format_pg_filename{savePCDDirectory + "optimized_poses.txt"};
         saveOptimizedVerticesKITTIformat(isamCurrentEstimate, kitti_format_pg_filename);
         savePath(globalPath, savePCDDirectory + "traj_tum.txt");
         pcl::io::savePCDFileASCII(savePCDDirectory + "trajectory.pcd", *cloudKeyPoses3D);
         pcl::io::savePCDFileASCII(savePCDDirectory + "transformations.pcd", *cloudKeyPoses6D);
+
+        if (savePCD == false) return;
+        cout << "****************************************************" << endl;
+        cout << "Saving map to pcd files ..." << endl;
+
         pcl::PointCloud<PointType>::Ptr globalCornerCloud(new pcl::PointCloud<PointType>());
         pcl::PointCloud<PointType>::Ptr globalCornerCloudDS(new pcl::PointCloud<PointType>());
         pcl::PointCloud<PointType>::Ptr globalSurfCloud(new pcl::PointCloud<PointType>());
@@ -1284,8 +1285,11 @@ public:
         downSizeFilterSurf.filter(*laserCloudSurfFromMapDS);
         laserCloudSurfFromMapDSNum = laserCloudSurfFromMapDS->size();
 
+        kdtreeCornerFromMap->setInputCloud(laserCloudCornerFromMapDS);
+        kdtreeSurfFromMap->setInputCloud(laserCloudSurfFromMapDS);
+
         // clear map cache if too large
-        if (laserCloudMapContainer.size() > 1000) laserCloudMapContainer.clear();
+        if (laserCloudMapContainer.size() > 10) laserCloudMapContainer.clear();
 
         auto t2 = GET_TIME();
         printf("ds: %.2f ", GET_USED(t2, t1) * 1000);
@@ -1640,8 +1644,8 @@ public:
         if (cloudKeyPoses3D->points.empty()) return;
 
         if (laserCloudCornerLastDSNum > edgeFeatureMinValidNum && laserCloudSurfLastDSNum > surfFeatureMinValidNum) {
-            kdtreeCornerFromMap->setInputCloud(laserCloudCornerFromMapDS);
-            kdtreeSurfFromMap->setInputCloud(laserCloudSurfFromMapDS);
+            // kdtreeCornerFromMap->setInputCloud(laserCloudCornerFromMapDS);
+            // kdtreeSurfFromMap->setInputCloud(laserCloudSurfFromMapDS);
 
             for (int iterCount = 0; iterCount < 20; iterCount++) {
                 laserCloudOri->clear();
