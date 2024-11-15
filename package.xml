@@ -23,6 +23,7 @@
   <build_depend>tf2_geometry_msgs</build_depend>
   <build_depend>tf2_sensor_msgs</build_depend>
   <build_depend>visualization_msgs</build_depend>
+  <build_depend>pcl_conversions</build_depend>
   <build_depend>pcl_msgs</build_depend>
   <build_depend>tf2_eigen</build_depend>
   <build_depend>tf2_ros</build_depend>
@@ -32,7 +33,8 @@
   <build_depend>GTSAM</build_depend>
   <build_depend>Eigen</build_depend>
   <build_depend>livox_ros_driver2</build_depend>
-
+  <build_depend>autorccar_interfaces</build_depend>
+  
   <exec_depend>rosidl_default_runtime</exec_depend>
   <exec_depend>rclcpp</exec_depend>
   <exec_depend>rclpy</exec_depend>
@@ -52,7 +54,7 @@
   <exec_depend>GTSAM</exec_depend>
   <exec_depend>Eigen</exec_depend>
   <exec_depend>livox_ros_driver2</exec_depend>
-  
+    
   <member_of_group>rosidl_interface_packages</member_of_group>
 
   <test_depend>ament_lint_auto</test_depend>

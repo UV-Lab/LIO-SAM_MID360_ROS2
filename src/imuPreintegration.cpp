@@ -519,16 +519,22 @@ class IMUPreintegration : public ParamServer {
 
         autorccar_interfaces::msg::NavState navState;
         navState.timestamp = odometry.header.stamp;
-        navState.position.x = odometry.pose.pose.position.y;
-        navState.position.y = odometry.pose.pose.position.x;
-        navState.position.z = -odometry.pose.pose.position.z;
-        navState.velocity.x = odometry.twist.twist.linear.y;
-        navState.velocity.y = odometry.twist.twist.linear.x;
-        navState.velocity.z = -odometry.twist.twist.linear.z;
-        navState.quaternion.w = -0.7071 * odometry.pose.pose.orientation.x - 0.7071 * odometry.pose.pose.orientation.y;
-        navState.quaternion.x = 0.7071 * odometry.pose.pose.orientation.w - 0.7071 * odometry.pose.pose.orientation.z;
-        navState.quaternion.y = 0.7071 * odometry.pose.pose.orientation.w + 0.7071 * odometry.pose.pose.orientation.z;
-        navState.quaternion.z = 0.7071 * odometry.pose.pose.orientation.x - 0.7071 * odometry.pose.pose.orientation.y;
+        navState.position.x = odometry.pose.pose.position.x;
+        navState.position.y = odometry.pose.pose.position.y;
+        navState.position.z = odometry.pose.pose.position.z;
+        navState.velocity.x = odometry.twist.twist.linear.x;
+        navState.velocity.y = odometry.twist.twist.linear.y;
+        navState.velocity.z = odometry.twist.twist.linear.z;
+        navState.quaternion.w = odometry.pose.pose.orientation.w;
+        navState.quaternion.x = odometry.pose.pose.orientation.x;
+        navState.quaternion.y = odometry.pose.pose.orientation.y;
+        navState.quaternion.z = odometry.pose.pose.orientation.z;
+        navState.acceleration.x = thisImu.linear_acceleration.x;
+        navState.acceleration.y = thisImu.linear_acceleration.y;
+        navState.acceleration.z = thisImu.linear_acceleration.z;
+        navState.angular_velocity.x = thisImu.angular_velocity.x;
+        navState.angular_velocity.y = thisImu.angular_velocity.y;
+        navState.angular_velocity.z = thisImu.angular_velocity.z;
         pubNavState->publish(navState);
     }
 };
